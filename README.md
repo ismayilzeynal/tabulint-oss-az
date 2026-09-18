@@ -1,5 +1,7 @@
 # tabulint
 
+[![CI](https://github.com/ismayilzeynal/tabulint-oss-az/actions/workflows/ci.yml/badge.svg)](https://github.com/ismayilzeynal/tabulint-oss-az/actions/workflows/ci.yml)
+
 A lightweight open-source CLI and Python library for practical CSV, JSON, and JSON Lines data-quality checks.
 
 `tabulint` loads a dataset, infers what each field looks like, and reports the
