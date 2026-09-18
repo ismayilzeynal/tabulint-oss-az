@@ -55,6 +55,12 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+On Windows Command Prompt, activate the environment with:
+
+```bat
+.venv\Scripts\activate.bat
+```
+
 ## 5. Create a focused branch
 
 Use one branch per issue, with a short descriptive name. Replace `123` in the
@@ -89,6 +95,18 @@ Style notes:
 ```bash
 python -m pytest
 ```
+
+For a focused change, run the affected test module first, then run the full
+suite before pushing:
+
+```bash
+python -m pytest tests/test_<module>.py
+python -m pytest
+```
+
+If the editable install is unavailable, the command-line entry point can be
+checked from the checkout with `python -m tabulint --help`. Report the Python
+version, platform, command, and complete error output when setup or tests fail.
 
 Run the whole suite before you push, not only the tests you added. Every pull
 request must leave the suite green.
