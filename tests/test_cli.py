@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from tabulint.cli import EXIT_ERROR, EXIT_ISSUES, EXIT_OK, main
 from tabulint import check_file
 from tabulint.report import format_report, format_report_json
@@ -7,6 +9,26 @@ from tabulint.report import format_report, format_report_json
 CSV = "name,age\nAda,36\nGrace,45\n"
 JSON = '[{"name": "Ada", "age": 36}, {"name": "Grace", "age": 45}]'
 JSONL = '{"name": "Ada", "age": 36}\n{"name": "Grace", "age": 45}\n'
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+@pytest.mark.parametrize("options", [[], ["--quiet", "--format", "json"]])
+def test_duplicate_json_keys_exit_two_without_writing_report(write, tmp_path, capsys, suffix, options):
+    record = r'{"x": 1, "\u0078": 2}'
+    content = f"[{record}]" if suffix == ".json" else '\n{"x": 0}\n \n' + record + "\n"
+    path = write("duplicate" + suffix, content)
+    output = tmp_path / "report.txt"
+    output.write_text("existing report", encoding="utf-8")
+    assert main([path, "--output", str(output), *options]) == EXIT_ERROR
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert path in captured.err
+    assert "duplicate" in captured.err
+    assert "'x'" in captured.err
+    assert r"\u0078" not in captured.err
+    if suffix != ".json":
+        assert "line 4" in captured.err
+    assert output.read_text(encoding="utf-8") == "existing report"
 
 
 def test_clean_csv_exits_zero(write, capsys):

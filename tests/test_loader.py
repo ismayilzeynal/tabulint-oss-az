@@ -7,6 +7,65 @@ VALID_JSON = '[{"name": "Ada", "age": 36}, {"name": "Grace", "age": 45}]'
 VALID_JSONL = '{"name": "Ada", "age": 36}\n{"name": "Grace", "age": 45}\n'
 
 
+@pytest.mark.parametrize("suffix,reader", [
+    (".json", load_json), (".jsonl", load_jsonl), (".ndjson", load_jsonl),
+])
+@pytest.mark.parametrize("record,key", [
+    ('{"x": 1, "x": 2}', "x"),
+    ('{"x": null, "x": 2}', "x"),
+    ('{"outer": {"x": 1, "x": 2}}', "x"),
+    ('{"outer": [{"x": 1, "x": 2}]}', "x"),
+    (r'{"x": 1, "\u0078": 2}', "x"),
+    ('{"": 1, "": 2}', ""),
+])
+def test_json_readers_reject_duplicate_keys(write, suffix, reader, record, key):
+    content = f"[{record}]" if suffix == ".json" else '\n{"ok": 0}\n  \n' + record + "\n"
+    path = write("duplicate" + suffix, content)
+    with pytest.raises(TabulintError) as error:
+        reader(path)
+    message = str(error.value)
+    assert path in message
+    assert "duplicate" in message
+    assert repr(key) in message
+    assert r"\u0078" not in message
+    if suffix != ".json":
+        assert "line 4" in message
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+def test_load_dataset_rejects_duplicate_json_keys(write, suffix):
+    record = '{"x": 1, "x": 2}'
+    content = f"[{record}]" if suffix == ".json" else record + "\n"
+    with pytest.raises(TabulintError, match="duplicate"):
+        load_dataset(write("duplicate" + suffix, content))
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+def test_valid_nested_json_keeps_keys_scoped_to_each_object(write, suffix):
+    record = '{"a": {"x": 1}, "b": [{"x": 2}, {"x": 3}], "X": 4, "x": 5}'
+    content = f"[{record}, {record}]" if suffix == ".json" else record + "\n \n" + record + "\n"
+    expected = {"a": {"x": 1}, "b": [{"x": 2}, {"x": 3}], "X": 4, "x": 5}
+    assert load_dataset(write("valid" + suffix, content)) == [expected, expected]
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+@pytest.mark.parametrize("encoding", ["cp1252", "utf-8-sig"])
+def test_duplicate_key_validation_preserves_selected_encoding(write, suffix, encoding):
+    duplicate = '{"caf\u00e9": 1, "caf\u00e9": 2}'
+    valid = '{"caf\u00e9": 1}'
+    bad_content = f"[{duplicate}]" if suffix == ".json" else "\n" + duplicate + "\n"
+    good_content = f"[{valid}]" if suffix == ".json" else "\n" + valid + "\n"
+    bad = write("bad" + suffix, bad_content, encoding=encoding)
+    with pytest.raises(TabulintError) as error:
+        load_dataset(bad, encoding=encoding)
+    assert "'caf\u00e9'" in str(error.value)
+    assert bad in str(error.value)
+    if suffix != ".json":
+        assert "line 2" in str(error.value)
+    good = write("good" + suffix, good_content, encoding=encoding)
+    assert load_dataset(good, encoding=encoding) == [{"caf\u00e9": 1}]
+
+
 def test_load_valid_csv(write):
     rows = load_csv(write("people.csv", VALID_CSV))
     assert rows == [{"name": "Ada", "age": "36"}, {"name": "Grace", "age": "45"}]

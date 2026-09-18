@@ -98,6 +98,13 @@ Use `\t` for a tab. The option is ignored for JSON input. An empty or
 multi-character delimiter is rejected with exit code 2.
 Malformed CSV quoting, including unterminated quoted fields, also exits with code 2.
 
+JSON, JSONL, and NDJSON input rejects duplicate keys within any object, including
+nested objects. Keys are compared after decoding JSON escapes, so `"x"` and
+`"\u0078"` are the same key. The Python readers raise `TabulintError`, and the CLI
+exits with code 2, naming the file and duplicate key. JSONL/NDJSON errors also name
+the physical line number, counting blank lines. Reusing a key in separate objects
+or records remains valid.
+
 The `--encoding` option applies to CSV, JSON, JSONL, and NDJSON input and
 defaults to `utf-8`. Encoding names are resolved by Python's standard codec
 registry, so aliases such as `latin-1` are accepted. An unknown encoding name

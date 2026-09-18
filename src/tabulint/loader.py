@@ -3,9 +3,22 @@
 import codecs
 import csv
 import json
+from functools import partial
 from pathlib import Path
 
 from .models import Record, TabulintError
+
+
+def _unique_object(
+    pairs: list[tuple[str, object]], *, path: Path, line_number: int | None = None
+) -> Record:
+    record: Record = {}
+    for key, value in pairs:
+        if key in record:
+            location = f"{path}: line {line_number}" if line_number is not None else str(path)
+            raise TabulintError(f"{location}: duplicate JSON key {key!r}")
+        record[key] = value
+    return record
 
 
 def _validate_encoding(path: Path, encoding: str) -> None:
@@ -65,7 +78,7 @@ def load_json(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
         ) from exc
 
     try:
-        data = json.loads(text)
+        data = json.loads(text, object_pairs_hook=partial(_unique_object, path=path))
     except json.JSONDecodeError as exc:
         raise TabulintError(f"{path}: malformed JSON ({exc.msg} at line {exc.lineno})") from exc
 
@@ -88,7 +101,10 @@ def load_jsonl(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
                 if not line.strip():
                     continue
                 try:
-                    item = json.loads(line)
+                    item = json.loads(
+                        line,
+                        object_pairs_hook=partial(_unique_object, path=path, line_number=line_number),
+                    )
                 except json.JSONDecodeError as exc:
                     raise TabulintError(
                         f"{path}: malformed JSON on line {line_number} ({exc.msg})"

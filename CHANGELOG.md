@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject duplicate JSON object keys, including nested keys, instead of silently overwriting values; JSONL/NDJSON errors include the physical line number.
 - Reject NaN and infinity values in `--min` and `--max` numeric bounds.
 
 ### Added
