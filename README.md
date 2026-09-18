@@ -66,8 +66,6 @@ tabulint data/people.csv --min age=0 --max age=120
 # Bounds are repeatable and independent
 tabulint data/scores.csv --min score=0 --max score=100 --max attempts=3
 
-Bounds must be finite numbers. Values such as `nan`, `inf`, and `-inf` are rejected.
-
 # Use a semicolon-delimited CSV
 tabulint data/people.csv --delimiter ";"
 
@@ -92,6 +90,8 @@ tabulint data/people.csv -q
 # Version
 tabulint --version
 ```
+
+Bounds must be finite numbers. Values such as `nan`, `inf`, and `-inf` are rejected.
 
 The `--delimiter` option applies to CSV input and accepts exactly one character.
 Use `\t` for a tab. The option is ignored for JSON input. An empty or
