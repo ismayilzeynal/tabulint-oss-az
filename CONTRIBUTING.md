@@ -46,19 +46,30 @@ Python 3.11 or newer is required.
 
 ```bash
 python -m venv .venv
-# Linux / macOS
-source .venv/bin/activate
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-
-python -m pip install -e ".[dev]"
-python -m pytest
 ```
 
-On Windows Command Prompt, activate the environment with:
+Activate the environment for your shell:
+
+```bash
+# Linux or macOS (bash/zsh)
+source .venv/bin/activate
+```
+
+```powershell
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+```
 
 ```bat
+REM Windows Command Prompt
 .venv\Scripts\activate.bat
+```
+
+Then install the project and run its tests:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
 ```
 
 ## 5. Create a focused branch
@@ -92,24 +103,35 @@ Style notes:
 
 ## 7. Run the tests
 
+Run one test while iterating, then its file and the full suite before pushing:
+
 ```bash
+python -m pytest tests/test_cli.py::test_clean_csv_exits_zero
+python -m pytest tests/test_cli.py
 python -m pytest
 ```
 
-For a focused change, run the affected test module first, then run the full
-suite before pushing:
+After the editable install, try the CLI from the checkout:
 
 ```bash
-python -m pytest tests/test_<module>.py
-python -m pytest
+tabulint --help
+python -m tabulint.cli --help
 ```
 
-If the editable install is unavailable, the command-line entry point can be
-checked from the checkout with `python -m tabulint --help`. Report the Python
-version, platform, command, and complete error output when setup or tests fail.
+The second command works when the `tabulint` console script is not on `PATH`.
 
-Run the whole suite before you push, not only the tests you added. Every pull
-request must leave the suite green.
+### Setup problems
+
+- If installation rejects your Python version, run `python --version` and
+  recreate `.venv` using Python 3.11 or newer.
+- If `tabulint` is missing or Python cannot import it, activate `.venv` and
+  rerun `python -m pip install -e ".[dev]"`; use `python -m tabulint.cli --help`
+  if only the console script is missing.
+- If PowerShell blocks `Activate.ps1`, run
+  `Set-ExecutionPolicy -Scope Process RemoteSigned` and activate it again.
+
+When asking for help, include your Python version, platform, failing command,
+and complete error output.
 
 ## 8. Commit
 
