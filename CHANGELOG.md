@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Report JSON syntax errors with line, column, and a bounded excerpt; report CSV ragged-row field counts and a delimiter hint.
 - Improved boolean type inference to recognize `true`, `false`, `yes`, `no`, `y`, `n`, `t`, and `f` case-insensitively after stripping whitespace.
 - Reject unterminated CSV quoting with `TabulintError` instead of accepting malformed records.
 - Grouped duplicate-record reporting so each duplicated record produces one issue naming every repeated row, instead of one issue per repeat.

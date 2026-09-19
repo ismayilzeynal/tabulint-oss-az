@@ -41,6 +41,20 @@ def test_load_dataset_rejects_duplicate_json_keys(write, suffix):
 
 
 @pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+def test_duplicate_json_key_in_error_is_bounded(write, suffix):
+    key = "x" * 400
+    record = '{"' + key + '": 1, "' + key + '": 2}'
+    path = write("duplicate" + suffix, f"[{record}]" if suffix == ".json" else record)
+    with pytest.raises(TabulintError) as error:
+        load_dataset(path)
+    message = str(error.value)
+    assert "duplicate JSON key" in message
+    assert key not in message
+    assert "..." in message
+    assert len(message) < len(path) + 130
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
 def test_valid_nested_json_keeps_keys_scoped_to_each_object(write, suffix):
     record = '{"a": {"x": 1}, "b": [{"x": 2}, {"x": 3}], "X": 4, "x": 5}'
     content = f"[{record}, {record}]" if suffix == ".json" else record + "\n \n" + record + "\n"
@@ -111,6 +125,39 @@ def test_malformed_json_raises(write):
         load_json(write("bad.json", '[{"name": "Ada",}]'))
 
 
+def test_malformed_json_names_line_column_and_excerpt(write):
+    path = write("bad.json", '[\n  {"name": }\n]')
+    with pytest.raises(TabulintError) as error:
+        load_json(path)
+    message = str(error.value)
+    assert path in message
+    assert "line 2, column 12" in message
+    assert 'near \'  {"name": }\'' in message
+
+
+@pytest.mark.parametrize("suffix,reader", [
+    (".json", load_json), (".jsonl", load_jsonl), (".ndjson", load_jsonl),
+])
+def test_long_malformed_json_excerpt_is_bounded(write, suffix, reader):
+    record = '{"payload": "' + "x" * 400 + '", "bad": }'
+    path = write("long" + suffix, f"[{record}]" if suffix == ".json" else record)
+    with pytest.raises(TabulintError) as error:
+        reader(path)
+    message = str(error.value)
+    assert '"bad": }' in message
+    assert "..." in message
+    assert "x" * 100 not in message
+    assert len(message) < len(path) + 200
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+def test_deeply_nested_json_raises_tabulint_error(write, suffix):
+    value = "[" * 5000 + "]" * 5000
+    content = f'[{{"value": {value}}}]' if suffix == ".json" else f'{{"value": {value}}}'
+    with pytest.raises(TabulintError, match="too deeply nested or large"):
+        load_dataset(write("deep" + suffix, content))
+
+
 def test_json_must_be_array_of_objects(write):
     with pytest.raises(TabulintError, match="array of objects"):
         load_json(write("obj.json", '{"name": "Ada"}'))
@@ -120,7 +167,7 @@ def test_json_must_be_array_of_objects(write):
 
 def test_jsonl_malformed_line_names_physical_line_number(write):
     content = '{"name": "Ada"}\n\n{oops}\n'
-    with pytest.raises(TabulintError, match=r"line 3"):
+    with pytest.raises(TabulintError, match=r"line 3, column 2.*near '\{oops\}'"):
         load_jsonl(write("bad.jsonl", content))
 
 
@@ -131,8 +178,26 @@ def test_jsonl_non_object_line_names_physical_line_number(write):
 
 
 def test_csv_with_extra_fields_raises(write):
-    with pytest.raises(TabulintError, match="more fields than the header"):
+    with pytest.raises(TabulintError, match=r"line 2 has 3 fields; header declares 2") as error:
         load_csv(write("ragged.csv", "name,age\nAda,36,extra\n"))
+    assert "Check --delimiter" in str(error.value)
+
+
+def test_ragged_csv_names_physical_line_after_multiline_field(write):
+    path = write("ragged.csv", 'name,note\nAda,"first\nsecond"\nGrace,ok,extra\n')
+    with pytest.raises(TabulintError, match=r"line 4 has 3 fields; header declares 2"):
+        load_csv(path)
+
+
+def test_one_column_csv_remains_valid(write):
+    path = write("single.csv", "name;age\nAda;36\n")
+    assert load_csv(path) == [{"name;age": "Ada;36"}]
+
+
+def test_ragged_one_column_csv_suggests_delimiter(write):
+    path = write("ragged.csv", "name;age\nAda,36\n")
+    with pytest.raises(TabulintError, match=r"2 fields; header declares 1.*--delimiter"):
+        load_csv(path)
 
 
 def test_csv_with_empty_header_name_raises(write):
@@ -162,6 +227,14 @@ def test_csv_with_escaped_quotes_and_commas(write):
 def test_missing_file_raises(write, tmp_path):
     with pytest.raises(TabulintError, match="file not found"):
         load_dataset(str(tmp_path / "nope.csv"))
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".json", ".jsonl", ".ndjson"])
+def test_directory_read_failure_raises_tabulint_error(tmp_path, suffix):
+    path = tmp_path / ("folder" + suffix)
+    path.mkdir()
+    with pytest.raises(TabulintError, match="could not read file"):
+        load_dataset(path)
 
 
 def test_unsupported_extension_raises(write):
@@ -222,6 +295,16 @@ def test_encoding_is_threaded_through_load_dataset(write):
 def test_unknown_encoding_raises_tabulint_error(write):
     with pytest.raises(TabulintError, match="unknown encoding 'not-a-real-encoding'"):
         load_csv(write("people.csv", VALID_CSV), encoding="not-a-real-encoding")
+
+
+def test_unknown_encoding_name_in_error_is_bounded(write):
+    encoding = "x" * 400
+    path = write("people.csv", VALID_CSV)
+    with pytest.raises(TabulintError) as error:
+        load_csv(path, encoding=encoding)
+    message = str(error.value)
+    assert encoding not in message
+    assert len(message) < len(path) + 120
 
 
 def test_decode_failure_names_file_and_encoding(tmp_path):

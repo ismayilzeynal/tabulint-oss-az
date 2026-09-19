@@ -100,6 +100,13 @@ The `--delimiter` option applies to CSV input and accepts exactly one character.
 Use `\t` for a tab. The option is ignored for JSON input. An empty or
 multi-character delimiter is rejected with exit code 2.
 Malformed CSV quoting, including unterminated quoted fields, also exits with code 2.
+An overlong CSV row reports its physical line and the actual and expected field
+counts, with a reminder to check `--delimiter`. A valid single-column CSV still
+loads normally.
+
+Malformed JSON, JSONL, and NDJSON input exits with code 2 and reports the line,
+column, and a short excerpt near the error. The excerpt is bounded even when the
+input line is very long. JSONL and NDJSON line numbers count blank lines.
 
 JSON, JSONL, and NDJSON input rejects duplicate keys within any object, including
 nested objects. Keys are compared after decoding JSON escapes, so `"x"` and

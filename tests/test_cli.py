@@ -85,6 +85,20 @@ def test_malformed_jsonl_exits_two(write, capsys):
     assert "line 3" in captured.err
 
 
+@pytest.mark.parametrize("suffix,content,details", [
+    (".json", '[\n{"x": }]', "line 2, column 7"),
+    (".jsonl", '\n{"x": }', "line 2, column 7"),
+    (".ndjson", '\n{"x": }', "line 2, column 7"),
+    (".csv", "name,age\nAda,36,extra\n", "3 fields; header declares 2"),
+])
+def test_malformed_input_details_keep_cli_exit_two(write, capsys, suffix, content, details):
+    path = write("bad" + suffix, content)
+    assert main([path]) == EXIT_ERROR
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert details in captured.err
+
+
 def test_numeric_rule_violation_exits_one(write, capsys):
     path = write("ages.csv", "name,age\nAda,200\n")
     assert main([path, "--max", "age=120"]) == EXIT_ISSUES

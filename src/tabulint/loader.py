@@ -9,6 +9,36 @@ from pathlib import Path
 from .models import Record, TabulintError
 
 
+def _bounded_repr(value: str, limit: int = 80) -> str:
+    return repr(value[:limit] + ("..." if len(value) > limit else ""))
+
+
+def _json_error(
+    path: Path, error: json.JSONDecodeError, *, line_number: int | None = None
+) -> TabulintError:
+    """Show a bounded piece of the line around a JSON syntax error."""
+    document = error.doc
+    line_start = document.rfind("\n", 0, error.pos) + 1
+    line_end = document.find("\n", error.pos)
+    if line_end == -1:
+        line_end = len(document)
+    start = max(line_start, error.pos - 40)
+    end = min(line_end, start + 80)
+    start = max(line_start, end - 80)
+    excerpt = document[start:end]
+    if start > line_start:
+        excerpt = "..." + excerpt
+    if end < line_end:
+        excerpt += "..."
+    if not excerpt:
+        excerpt = "<empty line>"
+    line = error.lineno if line_number is None else line_number
+    return TabulintError(
+        f"{path}: malformed JSON at line {line}, column {error.colno} "
+        f"({error.msg}; near {excerpt!r}). Check the JSON syntax there."
+    )
+
+
 def _unique_object(
     pairs: list[tuple[str, object]], *, path: Path, line_number: int | None = None
 ) -> Record:
@@ -16,7 +46,7 @@ def _unique_object(
     for key, value in pairs:
         if key in record:
             location = f"{path}: line {line_number}" if line_number is not None else str(path)
-            raise TabulintError(f"{location}: duplicate JSON key {key!r}")
+            raise TabulintError(f"{location}: duplicate JSON key {_bounded_repr(key)}")
         record[key] = value
     return record
 
@@ -25,7 +55,7 @@ def _validate_encoding(path: Path, encoding: str) -> None:
     try:
         codecs.lookup(encoding)
     except LookupError as exc:
-        raise TabulintError(f"{path}: unknown encoding '{encoding}'") from exc
+        raise TabulintError(f"{path}: unknown encoding {_bounded_repr(encoding)}") from exc
 
 
 def load_csv(
@@ -47,10 +77,14 @@ def load_csv(
             if any(name is None or name == "" for name in reader.fieldnames):
                 raise TabulintError(f"{path}: CSV header contains an empty column name")
             rows: list[Record] = []
-            for line_number, row in enumerate(reader, start=2):
+            for row in reader:
                 if None in row:
+                    expected = len(reader.fieldnames)
+                    actual = expected + len(row[None])
                     raise TabulintError(
-                        f"{path}: line {line_number} has more fields than the header"
+                        f"{path}: line {reader.line_num} has {actual} fields; "
+                        f"header declares {expected}. Check --delimiter if the file "
+                        "uses a different separator."
                     )
                 rows.append(dict(row))
             return rows
@@ -61,7 +95,13 @@ def load_csv(
             f"{path}: could not decode file using encoding '{encoding}'"
         ) from exc
     except csv.Error as exc:
-        raise TabulintError(f"{path}: malformed CSV ({exc})") from exc
+        raise TabulintError(
+            f"{path}: malformed CSV ({exc}). Check quoted fields and --delimiter."
+        ) from exc
+    except OSError as exc:
+        raise TabulintError(
+            f"{path}: could not read file ({exc.strerror or type(exc).__name__})"
+        ) from exc
 
 
 def load_json(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
@@ -76,11 +116,19 @@ def load_json(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
         raise TabulintError(
             f"{path}: could not decode file using encoding '{encoding}'"
         ) from exc
+    except OSError as exc:
+        raise TabulintError(
+            f"{path}: could not read file ({exc.strerror or type(exc).__name__})"
+        ) from exc
 
     try:
         data = json.loads(text, object_pairs_hook=partial(_unique_object, path=path))
     except json.JSONDecodeError as exc:
-        raise TabulintError(f"{path}: malformed JSON ({exc.msg} at line {exc.lineno})") from exc
+        raise _json_error(path, exc) from exc
+    except (RecursionError, ValueError) as exc:
+        raise TabulintError(
+            f"{path}: malformed JSON (input is too deeply nested or large)"
+        ) from exc
 
     if not isinstance(data, list):
         raise TabulintError(f"{path}: expected a JSON array of objects")
@@ -106,8 +154,11 @@ def load_jsonl(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
                         object_pairs_hook=partial(_unique_object, path=path, line_number=line_number),
                     )
                 except json.JSONDecodeError as exc:
+                    raise _json_error(path, exc, line_number=line_number) from exc
+                except (RecursionError, ValueError) as exc:
                     raise TabulintError(
-                        f"{path}: malformed JSON on line {line_number} ({exc.msg})"
+                        f"{path}: malformed JSON on line {line_number} "
+                        "(input is too deeply nested or large)"
                     ) from exc
                 if not isinstance(item, dict):
                     raise TabulintError(f"{path}: line {line_number} is not a JSON object")
@@ -117,6 +168,10 @@ def load_jsonl(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
     except UnicodeDecodeError as exc:
         raise TabulintError(
             f"{path}: could not decode file using encoding '{encoding}'"
+        ) from exc
+    except OSError as exc:
+        raise TabulintError(
+            f"{path}: could not read file ({exc.strerror or type(exc).__name__})"
         ) from exc
     return rows
 
