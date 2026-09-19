@@ -101,6 +101,26 @@ Style notes:
 - Code assistants are welcome. Review the diff yourself, run the tests, and be
   able to explain the change you submit.
 
+### Changelog entries
+
+For a user-visible change, add one short bullet under `## [Unreleased]` in
+`CHANGELOG.md`. Put a new feature under `### Added`, a behavior change under
+`### Changed`, a deprecation under `### Deprecated`, a removed feature under
+`### Removed`, a bug fix under `### Fixed`, or a security fix under
+`### Security`. Add the heading if it is missing. Describe the effect for users
+in the present tense; leave version numbers and release dates to the maintainer.
+For example, a fix for an error that used to be hidden could be:
+
+```markdown
+### Fixed
+
+- Report malformed CSV quoting as an error instead of accepting an incomplete record.
+```
+
+Documentation-only, test-only, and internal maintenance changes generally do
+not need a changelog entry. Maintainers move the `Unreleased` entries into a
+dated release section when they publish a release; see [RELEASING.md](RELEASING.md).
+
 ## 7. Run the tests
 
 Run one test while iterating, then its file and the full suite before pushing:

@@ -7,17 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject duplicate JSON object keys, including nested keys, instead of silently overwriting values; JSONL/NDJSON errors include the physical line number.
+- Reject NaN and infinity values in `--min` and `--max` numeric bounds.
+
 ### Added
 
+- Added a per-field missing-value summary to text reports, including counts and percentages.
 - Added `--output` and `-o` CLI options for UTF-8 report file output.
 - Added `--quiet` and `-q` CLI options for summary-only stdout output.
 - Added configurable CSV delimiters through the Python API and `--delimiter` CLI option.
 - Added `--format {text,json}` and `format_report_json` for machine-readable JSON report output.
 - Added JSON Lines / NDJSON loading through `.jsonl` and `.ndjson` file extensions.
+- Added configurable input encoding through the Python API and `--encoding` CLI option for CSV, JSON, JSONL, and NDJSON input.
 
 ### Changed
 
 - Improved boolean type inference to recognize `true`, `false`, `yes`, `no`, `y`, `n`, `t`, and `f` case-insensitively after stripping whitespace.
+- Reject unterminated CSV quoting with `TabulintError` instead of accepting malformed records.
+- Grouped duplicate-record reporting so each duplicated record produces one issue naming every repeated row, instead of one issue per repeat.
 
 ## [0.1.0] - 2026-09-14
 

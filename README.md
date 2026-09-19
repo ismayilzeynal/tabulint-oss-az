@@ -1,5 +1,7 @@
 # tabulint
 
+[![CI](https://github.com/ismayilzeynal/tabulint-oss-az/actions/workflows/ci.yml/badge.svg)](https://github.com/ismayilzeynal/tabulint-oss-az/actions/workflows/ci.yml)
+
 A lightweight open-source CLI and Python library for practical CSV, JSON, and JSON Lines data-quality checks.
 
 `tabulint` loads a dataset, infers what each field looks like, and reports the
@@ -27,73 +29,92 @@ python -m pytest
 ## Quickstart
 
 ```bash
-tabulint people.csv
+tabulint examples/missing.csv
 ```
 
 ```
-tabulint: people.csv
-  records: 4
+tabulint: examples/missing.csv
+  records: 3
   fields:
-    name  string
-    age   integer (1 missing)
-  issues: 2
-    [warning] row 3: missing-value: field 'age' has a missing value
-    [error] row 4: type-mismatch: field 'age' expects integer but value 'old' looks like string
-  summary: 1 error(s), 1 warning(s)
+    item_id  string
+    age      integer (1 missing)
+  missing values:
+    age: 1 missing (33%)
+  issues: 1
+    [warning] row 2: missing-value: field 'age' has a missing value
+  summary: 0 error(s), 1 warning(s)
 ```
+
+The command exits with code 1 because it found a data-quality issue. See
+[all example datasets](examples/README.md) for clean and problematic inputs.
 
 ## CLI examples
 
 ```bash
 # Check a CSV file
-tabulint data/people.csv
+tabulint examples/clean.csv
 
 # Check a JSON array of objects
-tabulint data/people.json
+tabulint examples/clean.json
 
 # Check a JSON Lines file
-tabulint data/events.jsonl
+tabulint examples/clean.jsonl
 
 # JSON Lines also supports the .ndjson extension
-tabulint data/events.ndjson
+tabulint examples/clean.ndjson
 
 # Emit a machine-readable JSON report
-tabulint data/people.csv --format json
+tabulint examples/clean.csv --format json
 
 # Require a numeric field to stay within a range
-tabulint data/people.csv --min age=0 --max age=120
+tabulint examples/clean.csv --min age=0 --max age=120
 
 # Bounds are repeatable and independent
-tabulint data/scores.csv --min score=0 --max score=100 --max attempts=3
+tabulint examples/clean.csv --min score=0 --max score=100 --max attempts=3
 
-# Use a semicolon-delimited CSV
-tabulint data/people.csv --delimiter ";"
-
-# Use the readable tab spelling for a tab-delimited CSV
-tabulint data/people.csv --delimiter "\t"
+# Set the CSV delimiter explicitly
+tabulint examples/clean.csv --delimiter ","
 
 # Write the report to a UTF-8 file while also printing it to stdout
-tabulint data/people.csv --output report.txt
+tabulint examples/clean.csv --output report.txt
 
 # The short output flag is equivalent
-tabulint data/people.csv -o report.txt
+tabulint examples/clean.csv -o report.txt
 
 # Suppress normal output and report only a summary when issues are found
-tabulint data/people.csv --quiet
+tabulint examples/missing.csv --quiet
 
 # JSON output stays clean when quiet mode is enabled
-tabulint data/people.csv --quiet --format json
+tabulint examples/missing.csv --quiet --format json
 
 # The short quiet flag is equivalent
-tabulint data/people.csv -q
+tabulint examples/missing.csv -q
 
 # Version
 tabulint --version
 ```
 
+Bounds must be finite numbers. Values such as `nan`, `inf`, and `-inf` are rejected.
+
 The `--delimiter` option applies to CSV input and accepts exactly one character.
 Use `\t` for a tab. The option is ignored for JSON input. An empty or
 multi-character delimiter is rejected with exit code 2.
+Malformed CSV quoting, including unterminated quoted fields, also exits with code 2.
+
+JSON, JSONL, and NDJSON input rejects duplicate keys within any object, including
+nested objects. Keys are compared after decoding JSON escapes, so `"x"` and
+`"\u0078"` are the same key. The Python readers raise `TabulintError`, and the CLI
+exits with code 2, naming the file and duplicate key. JSONL/NDJSON errors also name
+the physical line number, counting blank lines. Reusing a key in separate objects
+or records remains valid.
+
+The `--encoding` option applies to CSV, JSON, JSONL, and NDJSON input and
+defaults to `utf-8`. Encoding names are resolved by Python's standard codec
+registry, so aliases such as `latin-1` are accepted. An unknown encoding name
+exits with code 2 and a readable error. Decode failures name both the input file
+and the encoding that was attempted. Use `utf-8-sig` when reading UTF-8 files
+with a byte-order mark; this strips the BOM before parsing so it does not become
+part of the first field name.
 
 The `--format` option chooses the report representation: `text` is the default,
 and `json` emits a pretty-printed JSON document. JSON stdout contains only the
@@ -148,7 +169,7 @@ format, quiet mode leaves stdout empty so the JSON contract remains intact.
 from tabulint import build_numeric_rules, check_file, format_report, format_report_json
 
 rules = build_numeric_rules(minimums=["age=0"], maximums=["age=120"])
-report = check_file("people.csv", rules)
+report = check_file("examples/clean.csv", rules)
 
 print(report.row_count, report.error_count, report.warning_count)
 for issue in report.issues:
@@ -157,6 +178,9 @@ for issue in report.issues:
 print(format_report(report))
 print(format_report_json(report))
 ```
+
+To select an input encoding in the Python API, pass it to `check_file`, for
+example `check_file("examples/clean.csv", rules, encoding="cp1252")`.
 
 Working with records you already have in memory:
 
@@ -177,10 +201,10 @@ Main public names: `check_file`, `check_records`, `format_report`,
 
 | Format | Notes |
 | --- | --- |
-| `.csv` | UTF-8, configurable delimiter, first row is the header |
-| `.json` | A single JSON array of objects; the CSV delimiter option is ignored |
-| `.jsonl` | One JSON object per line; blank lines are skipped |
-| `.ndjson` | Alias for `.jsonl` |
+| `.csv` | UTF-8 by default, configurable encoding and delimiter, first row is the header |
+| `.json` | A single JSON array of objects; configurable encoding; the CSV delimiter option is ignored |
+| `.jsonl` | One JSON object per line; configurable encoding; blank lines are skipped |
+| `.ndjson` | Alias for `.jsonl` with the same encoding behavior |
 
 The reader is chosen from the file extension.
 
@@ -190,12 +214,16 @@ The reader is chosen from the file extension.
 | --- | --- | --- |
 | `missing-value` | warning | A field is present but empty or null |
 | `missing-field` | error | A record does not contain a field other records have |
-| `duplicate-record` | warning | A record is identical to an earlier record |
+| `duplicate-record` | warning | A group of identical records, reported once |
 | `type-mismatch` | error | A value does not match the field's dominant inferred type |
 | `below-minimum` | error | A value is below a `--min` bound |
 | `above-maximum` | error | A value is above an `--max` bound |
 | `not-numeric` | error | A `--min`/`--max` bound was given for a non-numeric value |
 | `empty-dataset` | warning | The dataset contains no records |
+
+Each `duplicate-record` warning names the first occurrence and up to 10
+repeated row numbers. Larger groups end with an `and N more` count. The issue's
+row number is the first repeated row.
 
 Inferred types are `integer`, `float`, `boolean`, `string`, and `null`. Strings
 are parsed, so the CSV text `12` and the JSON number `12` both infer as
@@ -217,7 +245,7 @@ still exits with code 1 when `--output` is used.
 This makes `tabulint` usable as a CI gate:
 
 ```bash
-tabulint data/people.csv --min age=0 || exit 1
+tabulint examples/clean.csv --min age=0 || exit 1
 ```
 
 ## Contributing
@@ -239,7 +267,7 @@ issues that have a task ID.
 
 These are the known boundaries of the current release, not bugs:
 
-- CSV is read as UTF-8 with a configurable delimiter; automatic delimiter sniffing is not available.
+- CSV is read as UTF-8 by default with configurable encoding and delimiter; automatic delimiter sniffing is not available.
 - Datasets are loaded fully into memory, so very large files are limited by RAM.
 - Only numeric `min`/`max` validation is available; no string-length,
   allowed-values, or required-field rules yet.

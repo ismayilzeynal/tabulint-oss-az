@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from tabulint.cli import EXIT_ERROR, EXIT_ISSUES, EXIT_OK, main
 from tabulint import check_file
 from tabulint.report import format_report, format_report_json
@@ -7,6 +9,26 @@ from tabulint.report import format_report, format_report_json
 CSV = "name,age\nAda,36\nGrace,45\n"
 JSON = '[{"name": "Ada", "age": 36}, {"name": "Grace", "age": 45}]'
 JSONL = '{"name": "Ada", "age": 36}\n{"name": "Grace", "age": 45}\n'
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+@pytest.mark.parametrize("options", [[], ["--quiet", "--format", "json"]])
+def test_duplicate_json_keys_exit_two_without_writing_report(write, tmp_path, capsys, suffix, options):
+    record = r'{"x": 1, "\u0078": 2}'
+    content = f"[{record}]" if suffix == ".json" else '\n{"x": 0}\n \n' + record + "\n"
+    path = write("duplicate" + suffix, content)
+    output = tmp_path / "report.txt"
+    output.write_text("existing report", encoding="utf-8")
+    assert main([path, "--output", str(output), *options]) == EXIT_ERROR
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert path in captured.err
+    assert "duplicate" in captured.err
+    assert "'x'" in captured.err
+    assert r"\u0078" not in captured.err
+    if suffix != ".json":
+        assert "line 4" in captured.err
+    assert output.read_text(encoding="utf-8") == "existing report"
 
 
 def test_clean_csv_exits_zero(write, capsys):
@@ -48,6 +70,14 @@ def test_malformed_json_exits_two(write, capsys):
     assert "error:" in capsys.readouterr().err
 
 
+def test_csv_with_unterminated_quote_exits_two(write, capsys):
+    path = write("unterminated.csv", 'name,age\nAda,"36\n')
+    assert main([path]) == EXIT_ERROR
+    captured = capsys.readouterr()
+    assert "malformed CSV" in captured.err
+    assert "unterminated.csv" in captured.err
+
+
 def test_malformed_jsonl_exits_two(write, capsys):
     path = write("bad.jsonl", '{"name": "Ada"}\n\n{oops}\n')
     assert main([path]) == EXIT_ERROR
@@ -69,6 +99,13 @@ def test_numeric_rule_satisfied_exits_zero(write):
 def test_invalid_bound_exits_two(write, capsys):
     assert main([write("ages.csv", CSV), "--min", "age"]) == EXIT_ERROR
     assert "invalid bound" in capsys.readouterr().err
+
+
+def test_non_finite_bound_exits_two(write, capsys):
+    assert main([write("ages.csv", CSV), "--min", "age=nan"]) == EXIT_ERROR
+    err = capsys.readouterr().err
+    assert "invalid bound" in err
+    assert "finite" in err
 
 
 def test_unsupported_extension_exits_two(write):
@@ -247,12 +284,13 @@ def test_json_format_clean_dataset_exits_zero(write, capsys):
 
 
 def test_json_format_preserves_all_issues(write, capsys):
-    path = write("large.csv", "name,age\n" + "Ada,36\n" * 61)
+    rows = "".join(f"Ada,{i}\nAda,{i}\n" for i in range(61))
+    path = write("large.csv", "name,age\n" + rows)
 
     assert main([path, "--format", "json"]) == EXIT_ISSUES
     data = json.loads(capsys.readouterr().out)
-    assert len(data["issues"]) == 60
-    assert data["issues"][-1]["code"] == "duplicate-record"
+    assert len(data["issues"]) == 61
+    assert all(issue["code"] == "duplicate-record" for issue in data["issues"])
 
 
 def test_json_format_output_file_matches_stdout(write, tmp_path, capsys):
@@ -283,3 +321,44 @@ def test_quiet_json_format_still_writes_complete_report(write, tmp_path, capsys)
     data = json.loads(output.read_text(encoding="utf-8"))
     assert len(data["issues"]) == 1
     assert capsys.readouterr().out == ""
+
+
+
+def test_encoding_via_cli_for_cp1252_csv(write, capsys):
+    path = write("people.csv", "name,city\nZoë,München\n", encoding="cp1252")
+    assert main([path, "--encoding", "cp1252"]) == EXIT_OK
+    assert "records: 1" in capsys.readouterr().out
+
+
+def test_encoding_via_cli_for_jsonl_and_ndjson(write):
+    content = '{"name": "Zoë"}\n'
+    jsonl = write("people.jsonl", content, encoding="cp1252")
+    ndjson = write("people.ndjson", content, encoding="cp1252")
+    assert main([jsonl, "--encoding", "cp1252"]) == EXIT_OK
+    assert main([ndjson, "--encoding", "cp1252"]) == EXIT_OK
+
+
+def test_unknown_encoding_exits_two(write, capsys):
+    path = write("people.csv", CSV)
+    assert main([path, "--encoding", "not-a-real-encoding"]) == EXIT_ERROR
+    assert "unknown encoding 'not-a-real-encoding'" in capsys.readouterr().err
+
+
+def test_decode_failure_via_cli_names_file_and_encoding(tmp_path, capsys):
+    path = tmp_path / "people.csv"
+    path.write_bytes("name\nMünchen\n".encode("cp1252"))
+    assert main([str(path), "--encoding", "utf-8"]) == EXIT_ERROR
+    err = capsys.readouterr().err
+    assert "people.csv" in err
+    assert "encoding 'utf-8'" in err
+
+
+def test_utf8_bom_via_cli(write, capsys):
+    path = write("people.csv", "\ufeffname,age\nAda,36\n", encoding="utf-8")
+    assert main([path, "--encoding", "utf-8-sig"]) == EXIT_OK
+    assert "records: 1" in capsys.readouterr().out
+
+
+def test_default_encoding_remains_utf8(write):
+    path = write("people.csv", CSV, encoding="utf-8")
+    assert main([path]) == EXIT_OK

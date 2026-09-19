@@ -7,6 +7,65 @@ VALID_JSON = '[{"name": "Ada", "age": 36}, {"name": "Grace", "age": 45}]'
 VALID_JSONL = '{"name": "Ada", "age": 36}\n{"name": "Grace", "age": 45}\n'
 
 
+@pytest.mark.parametrize("suffix,reader", [
+    (".json", load_json), (".jsonl", load_jsonl), (".ndjson", load_jsonl),
+])
+@pytest.mark.parametrize("record,key", [
+    ('{"x": 1, "x": 2}', "x"),
+    ('{"x": null, "x": 2}', "x"),
+    ('{"outer": {"x": 1, "x": 2}}', "x"),
+    ('{"outer": [{"x": 1, "x": 2}]}', "x"),
+    (r'{"x": 1, "\u0078": 2}', "x"),
+    ('{"": 1, "": 2}', ""),
+])
+def test_json_readers_reject_duplicate_keys(write, suffix, reader, record, key):
+    content = f"[{record}]" if suffix == ".json" else '\n{"ok": 0}\n  \n' + record + "\n"
+    path = write("duplicate" + suffix, content)
+    with pytest.raises(TabulintError) as error:
+        reader(path)
+    message = str(error.value)
+    assert path in message
+    assert "duplicate" in message
+    assert repr(key) in message
+    assert r"\u0078" not in message
+    if suffix != ".json":
+        assert "line 4" in message
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+def test_load_dataset_rejects_duplicate_json_keys(write, suffix):
+    record = '{"x": 1, "x": 2}'
+    content = f"[{record}]" if suffix == ".json" else record + "\n"
+    with pytest.raises(TabulintError, match="duplicate"):
+        load_dataset(write("duplicate" + suffix, content))
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+def test_valid_nested_json_keeps_keys_scoped_to_each_object(write, suffix):
+    record = '{"a": {"x": 1}, "b": [{"x": 2}, {"x": 3}], "X": 4, "x": 5}'
+    content = f"[{record}, {record}]" if suffix == ".json" else record + "\n \n" + record + "\n"
+    expected = {"a": {"x": 1}, "b": [{"x": 2}, {"x": 3}], "X": 4, "x": 5}
+    assert load_dataset(write("valid" + suffix, content)) == [expected, expected]
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+@pytest.mark.parametrize("encoding", ["cp1252", "utf-8-sig"])
+def test_duplicate_key_validation_preserves_selected_encoding(write, suffix, encoding):
+    duplicate = '{"caf\u00e9": 1, "caf\u00e9": 2}'
+    valid = '{"caf\u00e9": 1}'
+    bad_content = f"[{duplicate}]" if suffix == ".json" else "\n" + duplicate + "\n"
+    good_content = f"[{valid}]" if suffix == ".json" else "\n" + valid + "\n"
+    bad = write("bad" + suffix, bad_content, encoding=encoding)
+    with pytest.raises(TabulintError) as error:
+        load_dataset(bad, encoding=encoding)
+    assert "'caf\u00e9'" in str(error.value)
+    assert bad in str(error.value)
+    if suffix != ".json":
+        assert "line 2" in str(error.value)
+    good = write("good" + suffix, good_content, encoding=encoding)
+    assert load_dataset(good, encoding=encoding) == [{"caf\u00e9": 1}]
+
+
 def test_load_valid_csv(write):
     rows = load_csv(write("people.csv", VALID_CSV))
     assert rows == [{"name": "Ada", "age": "36"}, {"name": "Grace", "age": "45"}]
@@ -81,6 +140,25 @@ def test_csv_with_empty_header_name_raises(write):
         load_csv(write("blank.csv", "name,\nAda,36\n"))
 
 
+def test_csv_with_unterminated_quote_raises(write):
+    with pytest.raises(TabulintError, match="malformed CSV"):
+        load_csv(write("unterminated.csv", 'name,age\nAda,"36\n'))
+
+
+def test_csv_with_valid_multiline_field(tmp_path):
+    content = 'name,bio\nAda,"First computer\nprogrammer"\n'
+    path = tmp_path / "multiline.csv"
+    path.write_bytes(content.encode("utf-8"))
+    rows = load_csv(path)
+    assert rows == [{"name": "Ada", "bio": "First computer\nprogrammer"}]
+
+
+def test_csv_with_escaped_quotes_and_commas(write):
+    content = 'name,note\nAda,"Hello, ""World"""\n'
+    rows = load_csv(write("escaped.csv", content))
+    assert rows == [{"name": "Ada", "note": 'Hello, "World"'}]
+
+
 def test_missing_file_raises(write, tmp_path):
     with pytest.raises(TabulintError, match="file not found"):
         load_dataset(str(tmp_path / "nope.csv"))
@@ -114,3 +192,52 @@ def test_empty_delimiter_raises(write):
 def test_delimiter_is_ignored_for_json(write):
     rows = load_dataset(write("people.json", VALID_JSON), delimiter=";")
     assert rows == [{"name": "Ada", "age": 36}, {"name": "Grace", "age": 45}]
+
+
+
+def test_cp1252_csv_loads_with_selected_encoding(write):
+    path = write("people.csv", "name,city\nZoë,München\n", encoding="cp1252")
+    assert load_csv(path, encoding="cp1252") == [{"name": "Zoë", "city": "München"}]
+
+
+def test_selected_encoding_loads_json(write):
+    path = write("people.json", '[{"name": "Zoë"}]', encoding="cp1252")
+    assert load_json(path, encoding="cp1252") == [{"name": "Zoë"}]
+
+
+def test_selected_encoding_loads_jsonl_and_ndjson(write):
+    content = '{"name": "Zoë"}\n'
+    jsonl = write("people.jsonl", content, encoding="cp1252")
+    ndjson = write("people.ndjson", content, encoding="cp1252")
+    expected = [{"name": "Zoë"}]
+    assert load_jsonl(jsonl, encoding="cp1252") == expected
+    assert load_dataset(ndjson, encoding="cp1252") == expected
+
+
+def test_encoding_is_threaded_through_load_dataset(write):
+    path = write("people.csv", "name\nZoë\n", encoding="cp1252")
+    assert load_dataset(path, encoding="cp1252") == [{"name": "Zoë"}]
+
+
+def test_unknown_encoding_raises_tabulint_error(write):
+    with pytest.raises(TabulintError, match="unknown encoding 'not-a-real-encoding'"):
+        load_csv(write("people.csv", VALID_CSV), encoding="not-a-real-encoding")
+
+
+def test_decode_failure_names_file_and_encoding(tmp_path):
+    path = tmp_path / "people.csv"
+    path.write_bytes("name\nMünchen\n".encode("cp1252"))
+    with pytest.raises(TabulintError, match=r"people\.csv.*encoding 'utf-8'"):
+        load_csv(path)
+
+
+def test_utf8_bom_is_stripped_with_utf8_sig(write):
+    path = write("people.csv", "\ufeffname,age\nAda,36\n", encoding="utf-8")
+    assert load_csv(path, encoding="utf-8-sig") == [{"name": "Ada", "age": "36"}]
+
+
+def test_utf8_bom_is_stripped_for_json_and_jsonl(write):
+    json_path = write("people.json", '\ufeff[{"name": "Ada"}]', encoding="utf-8")
+    jsonl_path = write("people.jsonl", '\ufeff{"name": "Ada"}\n', encoding="utf-8")
+    assert load_json(json_path, encoding="utf-8-sig") == [{"name": "Ada"}]
+    assert load_jsonl(jsonl_path, encoding="utf-8-sig") == [{"name": "Ada"}]
