@@ -29,65 +29,64 @@ python -m pytest
 ## Quickstart
 
 ```bash
-tabulint people.csv
+tabulint examples/missing.csv
 ```
 
 ```
-tabulint: people.csv
-  records: 4
+tabulint: examples/missing.csv
+  records: 3
   fields:
-    name  string
-    age   integer (1 missing)
-  issues: 2
-    [warning] row 3: missing-value: field 'age' has a missing value
-    [error] row 4: type-mismatch: field 'age' expects integer but value 'old' looks like string
-  summary: 1 error(s), 1 warning(s)
+    item_id  string
+    age      integer (1 missing)
+  issues: 1
+    [warning] row 2: missing-value: field 'age' has a missing value
+  summary: 0 error(s), 1 warning(s)
 ```
+
+The command exits with code 1 because it found a data-quality issue. See
+[all example datasets](examples/README.md) for clean and problematic inputs.
 
 ## CLI examples
 
 ```bash
 # Check a CSV file
-tabulint data/people.csv
+tabulint examples/clean.csv
 
 # Check a JSON array of objects
-tabulint data/people.json
+tabulint examples/clean.json
 
 # Check a JSON Lines file
-tabulint data/events.jsonl
+tabulint examples/clean.jsonl
 
 # JSON Lines also supports the .ndjson extension
-tabulint data/events.ndjson
+tabulint examples/clean.ndjson
 
 # Emit a machine-readable JSON report
-tabulint data/people.csv --format json
+tabulint examples/clean.csv --format json
 
 # Require a numeric field to stay within a range
-tabulint data/people.csv --min age=0 --max age=120
+tabulint examples/clean.csv --min age=0 --max age=120
 
 # Bounds are repeatable and independent
-tabulint data/scores.csv --min score=0 --max score=100 --max attempts=3
+tabulint examples/clean.csv --min score=0 --max score=100 --max attempts=3
 
-# Use a semicolon-delimited CSV
-tabulint data/people.csv --delimiter ";"
-
-# Use the readable tab spelling for a tab-delimited CSV
-tabulint data/people.csv --delimiter "\t"
+# Set the CSV delimiter explicitly
+tabulint examples/clean.csv --delimiter ","
 
 # Write the report to a UTF-8 file while also printing it to stdout
-tabulint data/people.csv --output report.txt
+tabulint examples/clean.csv --output report.txt
 
 # The short output flag is equivalent
-tabulint data/people.csv -o report.txt
+tabulint examples/clean.csv -o report.txt
 
 # Suppress normal output and report only a summary when issues are found
-tabulint data/people.csv --quiet
+tabulint examples/missing.csv --quiet
 
 # JSON output stays clean when quiet mode is enabled
-tabulint data/people.csv --quiet --format json
+tabulint examples/missing.csv --quiet --format json
 
 # The short quiet flag is equivalent
-tabulint data/people.csv -q
+tabulint examples/missing.csv -q
 
 # Version
 tabulint --version
@@ -168,7 +167,7 @@ format, quiet mode leaves stdout empty so the JSON contract remains intact.
 from tabulint import build_numeric_rules, check_file, format_report, format_report_json
 
 rules = build_numeric_rules(minimums=["age=0"], maximums=["age=120"])
-report = check_file("people.csv", rules)
+report = check_file("examples/clean.csv", rules)
 
 print(report.row_count, report.error_count, report.warning_count)
 for issue in report.issues:
@@ -178,8 +177,8 @@ print(format_report(report))
 print(format_report_json(report))
 ```
 
-For a non-UTF-8 file, pass an encoding to the Python API, for example
-`check_file("people.csv", rules, encoding="cp1252")`.
+To select an input encoding in the Python API, pass it to `check_file`, for
+example `check_file("examples/clean.csv", rules, encoding="cp1252")`.
 
 Working with records you already have in memory:
 
@@ -244,7 +243,7 @@ still exits with code 1 when `--output` is used.
 This makes `tabulint` usable as a CI gate:
 
 ```bash
-tabulint data/people.csv --min age=0 || exit 1
+tabulint examples/clean.csv --min age=0 || exit 1
 ```
 
 ## Contributing
