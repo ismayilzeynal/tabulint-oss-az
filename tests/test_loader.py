@@ -151,11 +151,23 @@ def test_long_malformed_json_excerpt_is_bounded(write, suffix, reader):
 
 
 @pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
-def test_deeply_nested_json_raises_tabulint_error(write, suffix):
-    value = "[" * 5000 + "]" * 5000
-    content = f'[{{"value": {value}}}]' if suffix == ".json" else f'{{"value": {value}}}'
-    with pytest.raises(TabulintError, match="too deeply nested or large"):
-        load_dataset(write("deep" + suffix, content))
+@pytest.mark.parametrize("parser_error", [RecursionError, ValueError])
+def test_json_parser_limit_raises_tabulint_error(write, monkeypatch, suffix, parser_error):
+    content = '[{"value": 1}]' if suffix == ".json" else '\n{"value": 1}'
+    path = write("limited" + suffix, content)
+
+    def reject_input(*args, **kwargs):
+        raise parser_error("parser limit reached")
+
+    with monkeypatch.context() as patch:
+        patch.setattr("tabulint.loader.json.loads", reject_input)
+        with pytest.raises(TabulintError, match="too deeply nested or large") as error:
+            load_dataset(path)
+
+    assert isinstance(error.value.__cause__, parser_error)
+    assert path in str(error.value)
+    if suffix != ".json":
+        assert "line 2" in str(error.value)
 
 
 def test_json_must_be_array_of_objects(write):
