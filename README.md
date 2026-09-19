@@ -38,6 +38,8 @@ tabulint: examples/missing.csv
   fields:
     item_id  string
     age      integer (1 missing)
+  missing values:
+    age: 1 missing (33%)
   issues: 1
     [warning] row 2: missing-value: field 'age' has a missing value
   summary: 0 error(s), 1 warning(s)

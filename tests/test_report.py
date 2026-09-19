@@ -95,7 +95,49 @@ def test_text_report_is_unchanged():
         "  records: 2\n"
         "  fields:\n"
         "    age  integer (1 missing)\n"
+        "  missing values:\n"
+        "    age: 1 missing (50%)\n"
         "  issues: 1\n"
         "    [warning] row 2: missing-value: age is missing\n"
         "  summary: 0 error(s), 1 warning(s)"
     )
+
+
+def test_text_report_summarizes_missing_values_in_sorted_order():
+    report = Report(
+        path="people.csv",
+        row_count=3,
+        profiles=[
+            FieldProfile("age", "integer", missing_count=1),
+            FieldProfile("city", "string", missing_count=1),
+            FieldProfile("email", "string", missing_count=2),
+            FieldProfile("name", "string"),
+        ],
+        issues=[
+            Issue("missing-value", "warning", "age is missing", "age", 1),
+            Issue("missing-value", "warning", "email is missing", "email", 1),
+            Issue("missing-value", "warning", "email is missing", "email", 2),
+        ],
+    )
+
+    text = format_report(report)
+
+    assert "  missing values:\n" in text
+    assert text.index("    email: 2 missing (67%)") < text.index("    age: 1 missing (33%)")
+    assert text.index("    age: 1 missing (33%)") < text.index("    city: 1 missing (33%)")
+    assert "    name:" not in text
+
+
+def test_text_report_omits_missing_summary_for_complete_dataset():
+    report = Report(
+        path="people.csv",
+        row_count=2,
+        profiles=[
+            FieldProfile("age", "integer"),
+            FieldProfile("name", "string"),
+        ],
+    )
+
+    text = format_report(report)
+
+    assert "missing values:" not in text

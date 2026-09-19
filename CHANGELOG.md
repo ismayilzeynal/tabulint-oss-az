@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a per-field missing-value summary to text reports, including counts and percentages.
 - Added `--output` and `-o` CLI options for UTF-8 report file output.
 - Added `--quiet` and `-q` CLI options for summary-only stdout output.
 - Added configurable CSV delimiters through the Python API and `--delimiter` CLI option.

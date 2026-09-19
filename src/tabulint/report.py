@@ -22,6 +22,18 @@ def format_report(report: Report) -> str:
             note = f" ({profile.missing_count} missing)" if profile.missing_count else ""
             lines.append(f"    {profile.name.ljust(width)}  {profile.dominant_type}{note}")
 
+    missing_profiles = sorted(
+        (profile for profile in report.profiles if profile.missing_count),
+        key=lambda profile: (-profile.missing_count, profile.name),
+    )
+    if missing_profiles:
+        lines.append("  missing values:")
+        for profile in missing_profiles:
+            percentage = profile.missing_count / report.row_count if report.row_count else 0
+            lines.append(
+                f"    {profile.name}: {profile.missing_count} missing ({percentage:.0%})"
+            )
+
     if report.ok:
         lines.append("  no issues found")
         return "\n".join(lines)
