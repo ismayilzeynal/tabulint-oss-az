@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `--fail-on {error,warning,never}` to control whether warnings fail the
+- Add `--fail-on {error,warning,never}` to control whether warnings fail the
     command while keeping load and output failures at exit code 2.
 - Added a per-field missing-value summary to text reports, including counts and percentages.
 - Added `--output` and `-o` CLI options for UTF-8 report file output.

@@ -84,6 +84,12 @@ def test_fail_on_does_not_suppress_load_errors(tmp_path, capsys, fail_on):
     capsys.readouterr()
 
 
+def test_fail_on_never_still_prints_the_report(write, capsys):
+    path = write("dupes.csv", "name,age\nAda,36\nAda,36\n")
+    assert main([path, "--fail-on", "never"]) == EXIT_OK
+    assert "duplicate-record" in capsys.readouterr().out
+
+
 def test_ndjson_dataset_with_duplicates_exits_one(write, capsys):
     path = write("dupes.ndjson", '{"name": "Ada", "age": 36}\n{"name": "Ada", "age": 36}\n')
     assert main([path]) == EXIT_ISSUES
@@ -188,10 +194,11 @@ def test_output_file_uses_utf8_for_non_ascii_value(write, tmp_path):
     assert content.endswith(b"\n")
 
 
-def test_unwritable_output_path_exits_two(write, tmp_path, capsys):
+@pytest.mark.parametrize("fail_on", ["error", "warning", "never"])
+def test_unwritable_output_path_exits_two_for_every_fail_on(write, tmp_path, capsys, fail_on):
     path = write("people.csv", CSV)
     output = tmp_path / "missing" / "report.txt"
-    assert main([path, "--output", str(output)]) == EXIT_ERROR
+    assert main([path, "--output", str(output), "--fail-on", fail_on]) == EXIT_ERROR
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "could not write output file" in captured.err
