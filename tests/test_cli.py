@@ -54,6 +54,36 @@ def test_dataset_with_issues_exits_one(write, capsys):
     assert "duplicate-record" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("fail_on", ["error", "warning", "never"])
+@pytest.mark.parametrize(
+    "content,extra_args,warning_expected,error_expected",
+    [
+        ("name,age\nAda,36\nGrace,45\n", [], False, False),
+        ("name,age\nAda,36\nAda,36\n", [], True, False),
+        ("name,age\nAda,200\n", ["--max", "age=120"], False, True),
+    ],
+)
+def test_fail_on_values_cover_clean_warning_and_error_datasets(
+    write, capsys, fail_on, content, extra_args, warning_expected, error_expected
+):
+    path = write("data.csv", content)
+    actual = main([path, *extra_args, "--fail-on", fail_on])
+    expected = (
+        EXIT_ISSUES
+        if (fail_on == "warning" and (warning_expected or error_expected))
+        or (fail_on == "error" and error_expected)
+        else EXIT_OK
+    )
+    assert actual == expected
+    capsys.readouterr()
+
+
+@pytest.mark.parametrize("fail_on", ["error", "warning", "never"])
+def test_fail_on_does_not_suppress_load_errors(tmp_path, capsys, fail_on):
+    assert main([str(tmp_path / "nope.csv"), "--fail-on", fail_on]) == EXIT_ERROR
+    capsys.readouterr()
+
+
 def test_ndjson_dataset_with_duplicates_exits_one(write, capsys):
     path = write("dupes.ndjson", '{"name": "Ada", "age": 36}\n{"name": "Ada", "age": 36}\n')
     assert main([path]) == EXIT_ISSUES

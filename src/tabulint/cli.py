@@ -13,6 +13,14 @@ EXIT_ISSUES = 1
 EXIT_ERROR = 2
 
 
+def _issue_exit_code(report, fail_on: str) -> int:
+    if fail_on == "never":
+        return EXIT_OK
+    if fail_on == "error":
+        return EXIT_ISSUES if report.error_count else EXIT_OK
+    return EXIT_OK if report.ok else EXIT_ISSUES
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tabulint",
@@ -63,6 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="report format for stdout and --output (default: text)",
     )
+    parser.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "never"),
+        default="warning",
+        help="exit 1 for errors, any issues, or never (default: warning)",
+    )
     parser.add_argument("--version", action="version", version=f"tabulint {__version__}")
     return parser
 
@@ -95,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(rendered, end="")
 
-    return EXIT_OK if report.ok else EXIT_ISSUES
+    return _issue_exit_code(report, args.fail_on)
 
 
 if __name__ == "__main__":

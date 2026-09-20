@@ -245,9 +245,19 @@ whitespace: `true`, `false`, `yes`, `no`, `y`, `n`, `t`, and `f`.
 | `1` | Dataset loaded and at least one issue was found |
 | `2` | The dataset could not be loaded, the arguments were invalid, or the report could not be written |
 
-Exit codes are identical for text and JSON output. A successful report write
-does not change the data-quality exit code. For example, a dataset with issues
-still exits with code 1 when `--output` is used.
+Exit codes are identical for text and JSON output. Use `--fail-on` to control
+which loaded datasets fail:
+
+- `--fail-on warning` is the default and exits 1 when any issue is found.
+- `--fail-on error` exits 1 only when at least one error is found; warning-only
+  datasets exit 0.
+- `--fail-on never` exits 0 whenever the dataset loads, while still printing
+  the report.
+
+Load, argument, and report-write failures always exit 2, regardless of
+`--fail-on`. A successful report write does not change the data-quality exit
+code. For example, a dataset with issues still exits with code 1 when
+`--output` is used with the default `--fail-on warning`.
 
 This makes `tabulint` usable as a CI gate:
 
