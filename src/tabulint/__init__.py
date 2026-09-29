@@ -6,7 +6,7 @@ from .analyzer import analyze, infer_type, is_missing, profile_fields
 from .loader import load_csv, load_dataset, load_json, load_jsonl
 from .models import FieldProfile, Issue, Record, Report, TabulintError
 from .report import format_report, format_report_json
-from .validators import NumericRule, build_numeric_rules, check_numeric_rules
+from .validators import NumericRule, build_numeric_rules, check_numeric_rules, check_required_fields
 
 __version__ = "0.1.0"
 
@@ -23,6 +23,7 @@ __all__ = [
     "check_file",
     "check_numeric_rules",
     "check_records",
+    "check_required_fields",
     "format_report",
     "format_report_json",
     "infer_type",
@@ -39,9 +40,12 @@ def check_records(
     records: list[Record],
     rules: list[NumericRule] | None = None,
     path: str = "<records>",
+    *,
+    required_fields: list[str] | None = None,
 ) -> Report:
     """Run all checks against already-loaded records."""
     issues = analyze(records) + check_numeric_rules(records, rules or [])
+    issues += check_required_fields(records, required_fields or [])
     if not records:
         issues.append(
             Issue(
@@ -66,7 +70,8 @@ def check_file(
     *,
     delimiter: str = ",",
     encoding: str = "utf-8",
+    required_fields: list[str] | None = None,
 ) -> Report:
     """Load a CSV, JSON, or JSON Lines file and run all checks against it."""
     records = load_dataset(path, delimiter=delimiter, encoding=encoding)
-    return check_records(records, rules, path=str(path))
+    return check_records(records, rules, path=str(path), required_fields=required_fields)
