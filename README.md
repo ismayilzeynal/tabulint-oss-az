@@ -122,6 +122,9 @@ exits with code 2 and a readable error. Decode failures name both the input file
 and the encoding that was attempted. Use `utf-8-sig` when reading UTF-8 files
 with a byte-order mark; this strips the BOM before parsing so it does not become
 part of the first field name.
+Only text encodings are supported; codecs such as `hex` are rejected. A missing
+BOM for an encoding that requires one is also reported as a decode failure.
+Input paths containing a NUL character are rejected with exit code 2.
 
 The `--format` option chooses the report representation: `text` is the default,
 and `json` emits a pretty-printed JSON document. JSON stdout contains only the

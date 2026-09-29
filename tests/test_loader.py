@@ -319,6 +319,55 @@ def test_unknown_encoding_name_in_error_is_bounded(write):
     assert len(message) < len(path) + 120
 
 
+@pytest.mark.parametrize("suffix,content", [
+    (".csv", VALID_CSV), (".json", VALID_JSON),
+    (".jsonl", VALID_JSONL), (".ndjson", VALID_JSONL),
+])
+@pytest.mark.parametrize("encoding", ["hex", "base64_codec", "rot_13"])
+def test_non_text_encoding_raises_tabulint_error(write, suffix, content, encoding):
+    path = write("people" + suffix, content)
+    with pytest.raises(TabulintError, match="not a text encoding") as error:
+        load_dataset(path, encoding=encoding)
+    assert path in str(error.value)
+    assert repr(encoding) in str(error.value)
+
+
+@pytest.mark.parametrize("suffix,content", [
+    (".csv", VALID_CSV), (".json", VALID_JSON),
+    (".jsonl", VALID_JSONL), (".ndjson", VALID_JSONL),
+])
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-32", "undefined"])
+def test_plain_unicode_error_raises_tabulint_error(tmp_path, suffix, content, encoding):
+    path = tmp_path / ("people" + suffix)
+    byte_encoding = "utf-8" if encoding == "undefined" else encoding + "-le"
+    path.write_bytes(content.encode(byte_encoding))
+    with pytest.raises(TabulintError, match="could not decode file") as error:
+        load_dataset(path, encoding=encoding)
+    assert isinstance(error.value.__cause__, UnicodeError)
+    assert str(path) in str(error.value)
+    assert repr(encoding) in str(error.value)
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".json", ".jsonl", ".ndjson"])
+def test_input_path_with_nul_raises_tabulint_error(tmp_path, suffix):
+    path = str(tmp_path / ("invalid\0" + suffix))
+    with pytest.raises(TabulintError, match="input path contains a NUL character") as error:
+        load_dataset(path)
+    assert "\0" not in str(error.value)
+
+
+@pytest.mark.parametrize("suffix,content", [
+    (".csv", VALID_CSV), (".json", VALID_JSON),
+    (".jsonl", VALID_JSONL), (".ndjson", VALID_JSONL),
+])
+def test_encoding_with_nul_raises_tabulint_error(write, suffix, content):
+    path = write("people" + suffix, content)
+    with pytest.raises(TabulintError, match="invalid encoding") as error:
+        load_dataset(path, encoding="utf-8\0")
+    assert path in str(error.value)
+    assert "\0" not in str(error.value)
+
+
 def test_decode_failure_names_file_and_encoding(tmp_path):
     path = tmp_path / "people.csv"
     path.write_bytes("name\nMünchen\n".encode("cp1252"))
