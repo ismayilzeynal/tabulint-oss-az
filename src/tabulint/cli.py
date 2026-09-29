@@ -2,6 +2,8 @@
 
 import argparse
 import sys
+from pathlib import Path
+from typing import TextIO
 
 from . import __version__, check_file
 from .models import TabulintError
@@ -11,6 +13,13 @@ from .validators import build_numeric_rules
 EXIT_OK = 0
 EXIT_ISSUES = 1
 EXIT_ERROR = 2
+
+
+def _print_console(text: str, *, stream: TextIO, end: str = "\n") -> None:
+    """Keep reports and errors readable on terminals with limited encodings."""
+    encoding = stream.encoding or "utf-8"
+    printable = text.encode(encoding, errors="backslashreplace").decode(encoding)
+    print(printable, file=stream, end=end)
 
 
 def _issue_exit_code(report, fail_on: str) -> int:
@@ -89,25 +98,37 @@ def main(argv: list[str] | None = None) -> int:
         rules = build_numeric_rules(args.minimums, args.maximums)
         report = check_file(args.path, rules, delimiter=delimiter, encoding=args.encoding)
     except TabulintError as exc:
-        print(f"tabulint: error: {exc}", file=sys.stderr)
+        _print_console(f"tabulint: error: {exc}", stream=sys.stderr)
         return EXIT_ERROR
 
     formatter = format_report_json if args.format == "json" else format_report
     rendered = formatter(report) + "\n"
 
-    if args.output:
+    if args.output is not None:
         try:
+            output_path = Path(args.output)
+            input_path = Path(args.path)
+            if output_path.resolve() == input_path.resolve() or (
+                output_path.exists() and output_path.samefile(input_path)
+            ):
+                raise ValueError("output path refers to the input dataset")
             with open(args.output, "w", encoding="utf-8", newline="\n") as output_file:
                 output_file.write(rendered)
-        except OSError as exc:
-            print(f"tabulint: error: could not write output file '{args.output}': {exc}", file=sys.stderr)
+        except (OSError, ValueError, RuntimeError) as exc:
+            _print_console(
+                f"tabulint: error: could not write output file '{args.output}': {exc}",
+                stream=sys.stderr,
+            )
             return EXIT_ERROR
 
     if args.quiet:
         if not report.ok and args.format == "text":
-            print(f"{report.path}: {report.error_count} error(s), {report.warning_count} warning(s)")
+            _print_console(
+                f"{report.path}: {report.error_count} error(s), {report.warning_count} warning(s)",
+                stream=sys.stdout,
+            )
     else:
-        print(rendered, end="")
+        _print_console(rendered, stream=sys.stdout, end="")
 
     return _issue_exit_code(report, args.fail_on)
 
