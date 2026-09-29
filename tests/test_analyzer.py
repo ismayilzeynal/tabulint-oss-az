@@ -1,5 +1,10 @@
+import sys
+
+import pytest
+
 from tabulint import analyze, infer_type, is_missing, profile_fields
 from tabulint.analyzer import check_duplicates, check_missing_values, check_type_consistency
+from tabulint.models import TabulintError
 
 
 def codes(issues):
@@ -109,6 +114,69 @@ def test_duplicate_records_are_grouped_into_one_issue():
 
 def test_distinct_records_are_not_duplicates():
     assert check_duplicates([{"a": "1"}, {"a": "2"}]) == []
+
+
+def test_absent_fields_and_explicit_nulls_are_distinct_duplicate_groups():
+    issues = check_duplicates([{"a": None}, {}, {"a": None}, {}])
+    assert [issue.message for issue in issues] == [
+        "record from row 1 is repeated at rows 3",
+        "record from row 2 is repeated at rows 4",
+    ]
+
+
+def test_duplicate_objects_ignore_key_order_at_every_depth():
+    records = [
+        {"a": {"x": 1, "y": [{"first": True, "second": None}]}, "b": 2},
+        {"b": 2, "a": {"y": [{"second": None, "first": True}], "x": 1}},
+    ]
+    issues = check_duplicates(records)
+    assert len(issues) == 1
+    assert issues[0].message == "record from row 1 is repeated at rows 2"
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        (True, 1),
+        (1, 1.0),
+        (1, "1"),
+        (None, "None"),
+        ([True], [1]),
+        ({"a": True}, {"a": 1}),
+        ({"a": None}, {}),
+        ([1, 2], [2, 1]),
+        ([], {}),
+        ([[1], 2], [[1, 2]]),
+        ([[], []], [[]]),
+    ],
+)
+def test_duplicate_keys_preserve_types_order_and_container_boundaries(first, second):
+    assert check_duplicates([{"value": first}, {"value": second}]) == []
+
+
+def test_deeply_nested_duplicates_do_not_depend_on_python_recursion_limit():
+    first = second = None
+    for _ in range(sys.getrecursionlimit() + 10):
+        first = {"a": [first], "b": 1}
+        second = {"b": 1, "a": [second]}
+    issues = check_duplicates([{"value": first}, {"value": second}])
+    assert len(issues) == 1
+    assert issues[0].row == 2
+
+
+def test_shared_noncyclic_containers_are_allowed():
+    shared = {"a": []}
+    assert len(check_duplicates([{"value": [shared, shared]}] * 2)) == 1
+
+
+@pytest.mark.parametrize("value", [[], {}])
+def test_cyclic_containers_are_rejected(value):
+    if isinstance(value, list):
+        value.append(value)
+    else:
+        value["self"] = value
+    with pytest.raises(TabulintError, match="cyclic objects or lists"):
+        check_duplicates([{"value": value}])
 
 
 def test_two_distinct_duplicate_groups_produce_two_issues():
