@@ -243,6 +243,9 @@ assert not report.ok
 finite numbers, and a minimum cannot exceed its maximum. Invalid rules raise
 `TabulintError`.
 
+In-memory records must not contain cyclic dictionaries or lists; these raise
+`TabulintError` during duplicate detection.
+
 See the [Python API reference](docs/api.md) for every public name, signatures,
 return values, exceptions, result fields, and a worked pipeline example.
 
@@ -274,6 +277,9 @@ The reader is chosen from the file extension.
 Each `duplicate-record` warning names the first occurrence and up to 10
 repeated row numbers. Larger groups end with an `and N more` count. The issue's
 row number is the first repeated row.
+An absent field is distinct from a field explicitly set to `null`. Object key
+order does not affect duplicate detection, including for nested objects; array
+order and value types remain significant.
 
 Inferred types are `integer`, `float`, `boolean`, `string`, and `null`. Strings
 are parsed, so the CSV text `12` and the JSON number `12` both infer as

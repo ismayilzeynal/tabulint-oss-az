@@ -45,9 +45,9 @@ Returns structural issues, optional numeric-rule and required-field issues,
 field profiles, and record counts. `path` is a display label; no file is opened. Fields are collected
 in first-seen order across all records. An empty list produces one
 `empty-dataset` warning. This is also the result for a header-only CSV passed to
-`check_file`; headers are not retained when there are no records. No intentional
-`TabulintError` is raised; supply valid `NumericRule` objects, preferably from
-`build_numeric_rules`.
+`check_file`; headers are not retained when there are no records. Cyclic
+dictionaries or lists raise `TabulintError` during duplicate detection. Supply
+valid `NumericRule` objects, preferably from `build_numeric_rules`.
 
 `required_fields` defaults to `None` (no required-field checks); an empty list
 also leaves behavior unchanged. Names follow `check_required_fields` semantics.
@@ -63,8 +63,10 @@ analyze(records: list[Record]) -> list[Issue]
 
 Returns missing-field/value, duplicate-record, and type-mismatch issues, in that
 check order. It does not apply numeric or required-field rules, create profiles
-for the caller, or add an empty-dataset warning; `analyze([])` returns `[]`. No intentional
-`TabulintError` is raised.
+for the caller, or add an empty-dataset warning; `analyze([])` returns `[]`.
+Duplicates use typed structure: absent keys differ from explicit nulls, list
+order matters, and object-key insertion order does not. Cyclic dictionaries or
+lists raise `TabulintError`; shared containers without a cycle are accepted.
 
 ### `profile_fields`
 
@@ -324,10 +326,12 @@ A warning makes `ok` false even when `error_count` is zero. No intentional
 TabulintError(*args: object) -> TabulintError
 ```
 
-An `Exception` subclass representing a loading or rule-configuration failure.
+An `Exception` subclass representing a loading, rule-configuration, or cyclic
+in-memory record failure.
 Construction returns an exception instance with ordinary `Exception` argument
 and message behavior; it does not itself raise the exception. Catch it around
-`check_file`, readers, or `build_numeric_rules`. Data-quality findings are
+`check_file`, `check_records`, `analyze`, readers, `NumericRule`, or
+`build_numeric_rules`. Data-quality findings are
 returned as `Issue` objects instead.
 
 ### `__version__`
