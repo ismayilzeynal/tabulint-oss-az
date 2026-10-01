@@ -107,10 +107,11 @@ not missing. No intentional `TabulintError` is raised.
 Readers return a new `list[Record]` and perform no data-quality checks.
 Direct calls to `load_csv`, `load_json`, and `load_jsonl` ignore filename
 extensions; only `load_dataset` and `check_file` dispatch by extension.
-They raise `TabulintError` for missing or unreadable files, unknown encoding
-names, and input decoding failures reported by Python as `UnicodeDecodeError`.
+They raise `TabulintError` for missing or unreadable files, NUL-containing paths,
+unknown or invalid encoding names, non-text codecs, and Unicode decoding
+failures (including a missing byte-order mark for an encoding that requires it).
 Use a text encoding such as `utf-8`, `cp1252`, or `utf-8-sig`; the last strips a
-UTF-8 byte-order mark. Other codec errors can propagate as Python exceptions.
+UTF-8 byte-order mark.
 Each reader also has the format-specific errors listed below.
 
 ### `load_dataset`
