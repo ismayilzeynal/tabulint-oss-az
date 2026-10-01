@@ -209,11 +209,8 @@ assert not report.ok
 finite numbers, and a minimum cannot exceed its maximum. Invalid rules raise
 `TabulintError`.
 
-Main public names: `check_file`, `check_records`, `format_report`,
-`format_report_json`, `build_numeric_rules`, `check_numeric_rules`, `load_csv`,
-`load_json`, `load_jsonl`, `load_dataset`, `analyze`, `profile_fields`,
-`infer_type`, and the
-`Report`, `Issue`, `FieldProfile`, `NumericRule`, `TabulintError` types.
+See the [Python API reference](docs/api.md) for every public name, signatures,
+return values, exceptions, result fields, and a worked pipeline example.
 
 ## Supported formats
 
