@@ -11,7 +11,7 @@ when making programmatic decisions.
 
 Signatures use `Path` from `pathlib`. A `*` marks keyword-only arguments.
 `<factory>` means a fresh empty list or dictionary is created for each instance.
-Annotations describe supported inputs; the data classes do not enforce them
+Annotations describe supported inputs; only `NumericRule` validates its bounds
 at runtime. Unless an entry names a `TabulintError`, it has no intentional
 domain-error exception for supported inputs. Ordinary Python exceptions from
 invalid argument types, custom objects, or resource limits can still propagate.
@@ -22,7 +22,8 @@ invalid argument types, custom objects, or resource limits can still propagate.
 
 ```text
 check_file(path: str | Path, rules: list[NumericRule] | None = None,
-           *, delimiter: str = ",", encoding: str = "utf-8") -> Report
+           *, delimiter: str = ",", encoding: str = "utf-8",
+           required_fields: list[str] | None = None) -> Report
 ```
 
 Loads a file with `load_dataset`, then returns the same complete report as
@@ -30,21 +31,29 @@ Loads a file with `load_dataset`, then returns the same complete report as
 CSV; `encoding` applies to every supported format. The whole dataset is loaded
 into memory. Raises `TabulintError` for the loading failures described below.
 Data-quality findings become issues in the returned report, not exceptions.
+`required_fields` applies the optional presence checks described below.
 
 ### `check_records`
 
 ```text
 check_records(records: list[Record], rules: list[NumericRule] | None = None,
-              path: str = "<records>") -> Report
+              path: str = "<records>",
+              *, required_fields: list[str] | None = None) -> Report
 ```
 
-Returns structural issues, optional numeric-rule issues, field profiles, and
-record counts. `path` is a display label; no file is opened. Fields are collected
+Returns structural issues, optional numeric-rule and required-field issues,
+field profiles, and record counts. `path` is a display label; no file is opened. Fields are collected
 in first-seen order across all records. An empty list produces one
 `empty-dataset` warning. This is also the result for a header-only CSV passed to
 `check_file`; headers are not retained when there are no records. No intentional
 `TabulintError` is raised; supply valid `NumericRule` objects, preferably from
 `build_numeric_rules`.
+
+`required_fields` defaults to `None` (no required-field checks); an empty list
+also leaves behavior unchanged. Names follow `check_required_fields` semantics.
+Required-field issues are appended after the existing checks without removing
+`missing-value` warnings or `missing-field` errors. Zero-row inputs retain only
+the existing empty-dataset warning even when fields are required.
 
 ### `analyze`
 
@@ -53,8 +62,8 @@ analyze(records: list[Record]) -> list[Issue]
 ```
 
 Returns missing-field/value, duplicate-record, and type-mismatch issues, in that
-check order. It does not apply numeric rules, create profiles for the caller,
-or add an empty-dataset warning; `analyze([])` returns `[]`. No intentional
+check order. It does not apply numeric or required-field rules, create profiles
+for the caller, or add an empty-dataset warning; `analyze([])` returns `[]`. No intentional
 `TabulintError` is raised.
 
 ### `profile_fields`
@@ -164,8 +173,8 @@ identify the physical input line, counting blank lines.
 ### `NumericRule`
 
 ```text
-NumericRule(field_name: str, minimum: float | None = None,
-            maximum: float | None = None) -> NumericRule
+NumericRule(field_name: str, minimum: int | float | None = None,
+            maximum: int | float | None = None) -> NumericRule
 ```
 
 Returns a frozen data class with these fields:
@@ -173,11 +182,11 @@ Returns a frozen data class with these fields:
 | Field | Meaning |
 | --- | --- |
 | `field_name: str` | Exact name of the field to check. |
-| `minimum: float \| None` | Inclusive lower bound; `None` leaves it unset. |
-| `maximum: float \| None` | Inclusive upper bound; `None` leaves it unset. |
+| `minimum: int \| float \| None` | Inclusive lower bound; `None` leaves it unset. |
+| `maximum: int \| float \| None` | Inclusive upper bound; `None` leaves it unset. |
 
-The constructor does not validate bounds or raise `TabulintError`. For checked
-finite bounds and minimum/maximum ordering, use `build_numeric_rules`.
+The constructor raises `TabulintError` for bounds that are not integers or finite
+floats (including booleans), or a minimum greater than its maximum.
 
 ### `build_numeric_rules`
 
@@ -187,7 +196,10 @@ build_numeric_rules(minimums: list[str] | None = None,
 ```
 
 Returns rules parsed from entries such as `"age=0"` and `"age=120"`. Field names
-are stripped, and bounds are parsed as floats. Minimum and maximum lists are
+are stripped. Plain integer bounds are parsed exactly as integers; decimal and
+exponent forms use floats. Signs and valid underscore separators are accepted.
+Python's integer digit limit still applies after redundant leading zeros are
+removed. Minimum and maximum lists are
 independent; the last entry for a repeated field in either list wins. Rules
 follow the minimum fields' first-seen order, then maximum-only fields.
 Omitting both lists returns `[]`.
@@ -203,13 +215,27 @@ check_numeric_rules(records: list[Record], rules: list[NumericRule]) -> list[Iss
 
 Returns numeric issues in rule order, then record order. Bounds are inclusive.
 Absent fields and missing values are skipped; structural checks handle those.
-Numbers and numeric strings are compared through Python floats; booleans are
-not numeric values for this check. Float precision and range therefore apply.
-Dataset values are not explicitly checked for finiteness in the current API;
-in particular, NaN comparisons do not produce bound violations. A rule with
-neither bound still reports nonnumeric values.
-It does not validate rule definitions or intentionally raise `TabulintError`.
-Use `build_numeric_rules` to validate configuration before running the check.
+Integers and plain integer strings retain exact precision. Decimal and exponent
+strings use floats and their precision limits. Booleans, nonfinite numbers
+(including NaN and infinity), and unparseable strings produce `not-numeric`.
+A rule with neither bound still reports these values. Rules are validated by
+`NumericRule` construction; this check has no intentional `TabulintError`.
+
+### `check_required_fields`
+
+```text
+check_required_fields(records: list[Record], names: list[str]) -> list[Issue]
+```
+
+Returns `required-missing` errors for required fields that are absent or have
+values considered missing by `is_missing`. `0` and `False` remain present.
+Names match exactly, including case and whitespace, and repeated names are
+checked once in first-requested order, then record order. For nonempty datasets,
+a field absent from every record produces one dataset-level issue (`row=None`);
+otherwise each absent or missing value gets a one-based record-row issue.
+Records and names are not modified. An empty record list or name list returns `[]`.
+This helper does not run structural checks or add an empty-dataset warning.
+No intentional `TabulintError` is raised.
 
 ## Data and result types
 
@@ -343,14 +369,15 @@ model fields can cause Python's `TypeError`.
 
 ## Issue codes and severities
 
-These are all codes emitted by the built-in checks, including numeric rules
-and the empty-input check in `check_records`. They match the
+These are all codes emitted by the built-in checks, including numeric and
+required-field rules and the empty-input check in `check_records`. They match the
 [README checks table](../README.md#checks).
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
 | `missing-value` | warning | A present value is `None`, empty, or whitespace-only. |
 | `missing-field` | error | A field found in other records is absent from this record. |
+| `required-missing` | error | A requested required field is absent or has a missing value. |
 | `duplicate-record` | warning | A repeated-record group, reported once. |
 | `type-mismatch` | error | A nonmissing value differs from the dominant inferred type. |
 | `below-minimum` | error | A numeric value is below an inclusive minimum. |
