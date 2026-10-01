@@ -1,6 +1,7 @@
 """Type inference and the built-in structural checks."""
 
 from collections import Counter
+import math
 
 from ._numbers import _format_number, _parse_number
 from .models import FieldProfile, Issue, Record, TabulintError
@@ -30,7 +31,7 @@ def infer_type(value: object) -> str:
     if isinstance(value, int):
         return "integer"
     if isinstance(value, float):
-        return "float"
+        return "float" if math.isfinite(value) else "string"
     if not isinstance(value, str):
         return "string"
 
@@ -41,7 +42,9 @@ def infer_type(value: object) -> str:
         number = _parse_number(text)
     except ValueError:
         return "string"
-    return "integer" if isinstance(number, int) else "float"
+    if isinstance(number, int):
+        return "integer"
+    return "float" if math.isfinite(number) else "string"
 
 
 def field_names(records: list[Record]) -> list[str]:
@@ -192,6 +195,8 @@ def check_type_consistency(records: list[Record]) -> list[Issue]:
             value = record.get(name)
             actual = infer_type(value)
             if actual in ("null", profile.dominant_type):
+                continue
+            if profile.dominant_type == "float" and actual == "integer":
                 continue
             displayed_value = _format_number(value) if isinstance(value, int) else repr(value)
             issues.append(
