@@ -251,6 +251,11 @@ return values, exceptions, result fields, and a worked pipeline example.
 
 ## Supported formats
 
+CSV header names must be nonempty and unique. Duplicate names are rejected
+before data rows are read, with the file path and duplicate name in the error;
+the CLI exits 2. Names match exactly, including case and whitespace, and this
+check also applies to header-only files and custom delimiters.
+
 Input must be a regular file. Symbolic links to readable regular files work;
 directories, devices, special files, and symlink loops produce a readable error
 and CLI exit code 2. Path errors display the supplied path without resolving it

@@ -107,6 +107,13 @@ def load_csv(
                 return []
             if any(name is None or name == "" for name in reader.fieldnames):
                 raise TabulintError(f"{path}: CSV header contains an empty column name")
+            seen_names: set[str] = set()
+            for name in reader.fieldnames:
+                if name in seen_names:
+                    raise TabulintError(
+                        f"{path}: CSV header contains duplicate column name {_bounded_repr(name)}"
+                    )
+                seen_names.add(name)
             rows: list[Record] = []
             for row in reader:
                 if None in row:
