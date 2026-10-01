@@ -3,7 +3,7 @@
 from collections import Counter
 
 from ._numbers import _format_number, _parse_number
-from .models import FieldProfile, Issue, Record
+from .models import FieldProfile, Issue, Record, TabulintError
 
 BOOLEAN_LITERALS = {"true", "false", "yes", "no", "y", "n", "t", "f"}
 
@@ -103,8 +103,41 @@ def check_missing_values(records: list[Record]) -> list[Issue]:
     return issues
 
 
-def _record_key(record: Record, names: list[str]) -> tuple[str, ...]:
-    return tuple(repr(record.get(name)) for name in names)
+def _record_key(record: Record) -> tuple[object, ...]:
+    """Build a flat, typed key without depending on object insertion order.
+
+    Container lengths delimit their contents. An explicit stack also keeps
+    deeply nested JSON safe during both traversal and hashing of the key.
+    """
+    key: list[object] = []
+    pending: list[tuple[object, bool]] = [(record, False)]
+    active: set[int] = set()
+    while pending:
+        value, finished = pending.pop()
+        if finished:
+            active.remove(id(value))
+        elif isinstance(value, (dict, list)):
+            if id(value) in active:
+                raise TabulintError("records cannot contain cyclic objects or lists")
+            active.add(id(value))
+            key.extend((type(value), len(value)))
+            pending.append((value, True))
+            if isinstance(value, dict):
+                for name in sorted(
+                    value,
+                    key=lambda name: (
+                        type(name).__module__, type(name).__qualname__,
+                        name if isinstance(name, int) else repr(name),
+                    ),
+                    reverse=True,
+                ):
+                    pending.append((value[name], False))
+                    pending.append((name, False))
+            else:
+                pending.extend((item, False) for item in reversed(value))
+        else:
+            key.extend((type(value), value if isinstance(value, int) else repr(value)))
+    return tuple(key)
 
 
 DUPLICATE_ROWS_LIMIT = 10
@@ -121,11 +154,10 @@ def _format_duplicate_rows(rows: list[int]) -> str:
 
 def check_duplicates(records: list[Record]) -> list[Issue]:
     """Report each group of identical records once, listing every occurrence."""
-    names = field_names(records)
-    first_rows: dict[tuple[str, ...], int] = {}
-    duplicate_rows: dict[tuple[str, ...], list[int]] = {}
+    first_rows: dict[tuple[object, ...], int] = {}
+    duplicate_rows: dict[tuple[object, ...], list[int]] = {}
     for row, record in enumerate(records, start=1):
-        key = _record_key(record, names)
+        key = _record_key(record)
         first = first_rows.get(key)
         if first is None:
             first_rows[key] = row
