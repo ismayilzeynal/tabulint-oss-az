@@ -251,6 +251,11 @@ return values, exceptions, result fields, and a worked pipeline example.
 
 ## Supported formats
 
+Input must be a regular file. Symbolic links to readable regular files work;
+directories, devices, special files, and symlink loops produce a readable error
+and CLI exit code 2. Path errors display the supplied path without resolving it
+to an absolute path.
+
 | Format | Notes |
 | --- | --- |
 | `.csv` | UTF-8 by default, configurable encoding and delimiter, first row is the header |

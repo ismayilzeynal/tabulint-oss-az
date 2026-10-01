@@ -38,3 +38,8 @@ dependencies. The realistic risk areas are therefore:
 
 Reports in these areas are in scope. A dataset that simply produces a wrong or
 noisy data-quality report is a normal bug: open a public issue for it.
+
+Dataset readers reject directories, device files, and other special files
+before reading, and accept symbolic links to regular files. This is input
+validation, not a sandbox: paths can still select any regular file accessible
+to the current user, and the filesystem can change between validation and use.
