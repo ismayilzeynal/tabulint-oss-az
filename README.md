@@ -189,6 +189,14 @@ The `--output` / `-o` option overwrites an existing file rather than appending,
 and does not create missing parent directories. Reports are written with
 explicit UTF-8 encoding and Unix-style `\n` line endings. The report is also
 printed to stdout. A write failure is reported on stderr and exits with code 2.
+The output path must differ from the input dataset, including symbolic-link
+and hard-link aliases; otherwise the command exits 2 and preserves the input.
+Invalid output paths are also reported with exit code 2.
+
+Text reports escape unpaired Unicode surrogates from JSON so the report remains
+valid UTF-8. On terminals with limited encodings, unsupported characters are
+printed as backslash escapes; output files still use UTF-8. JSON reports retain
+their normal JSON escaping.
 
 The `--quiet` / `-q` option controls stdout only. When issues are found with the
 default text format, it prints one summary line containing the input path and
