@@ -10,6 +10,8 @@ is a prerequisite for another, though a few are natural neighbours and say so.
 The `Status` line is a snapshot; the GitHub issue is the source of truth for
 current availability.
 
+Status snapshot updated on 2026-10-02 after the maintainer integration audit.
+
 Before you start, read [CONTRIBUTING.md](CONTRIBUTING.md) for the fork and
 pull-request workflow. Check the issue discussion and linked pull requests,
 then comment with your intended approach before starting. Open one focused
@@ -32,7 +34,7 @@ House rules that apply to every task:
 
 ### [TASK-01] Improve missing-value summary
 
-**Status:** OPEN
+**Status:** DONE (issue #1 closed)
 **GitHub issue:** [#1](https://github.com/ismayilzeynal/tabulint-oss-az/issues/1)
 **Labels:** `enhancement`, `good first issue`
 
@@ -81,7 +83,7 @@ A dataset with 5,000 blank cells currently produces 5,000 near-identical lines. 
 
 ### [TASK-02] Improve duplicate-record reporting
 
-**Status:** OPEN
+**Status:** DONE (issue #2 closed)
 **GitHub issue:** [#2](https://github.com/ismayilzeynal/tabulint-oss-az/issues/2)
 **Labels:** `enhancement`, `good first issue`
 
@@ -180,7 +182,7 @@ Semicolon-delimited and tab-delimited exports are extremely common, especially f
 
 ### [TASK-04] Add configurable input encoding
 
-**Status:** OPEN
+**Status:** DONE (issue #4 closed)
 **GitHub issue:** [#4](https://github.com/ismayilzeynal/tabulint-oss-az/issues/4)
 **Labels:** `enhancement`, `cli`, `data-format`
 
@@ -389,7 +391,7 @@ Real CSV exports spell booleans as yes/no, y/n, and t/f. Today an `active` colum
 
 ### [TASK-08] Improve numeric type-inference edge cases
 
-**Status:** OPEN
+**Status:** DONE (issue #8 closed)
 **GitHub issue:** [#8](https://github.com/ismayilzeynal/tabulint-oss-az/issues/8)
 **Labels:** `enhancement`, `validation`
 
@@ -551,7 +553,7 @@ Categorical fields such as status, country, or tier are where typos and stray ca
 
 ### [TASK-11] Add required-field validation
 
-**Status:** OPEN
+**Status:** DONE (issue #11 closed)
 **GitHub issue:** [#11](https://github.com/ismayilzeynal/tabulint-oss-az/issues/11)
 **Labels:** `enhancement`, `validation`, `cli`
 
@@ -758,7 +760,7 @@ Shell redirection works for one invocation, but a CI job that wants to keep the 
 
 ### [TASK-15] Improve malformed-input errors
 
-**Status:** OPEN
+**Status:** DONE (issue #15 closed)
 **GitHub issue:** [#15](https://github.com/ismayilzeynal/tabulint-oss-az/issues/15)
 **Labels:** `enhancement`, `documentation`
 
@@ -859,7 +861,7 @@ scoped to one demonstrated improvement, not a rewrite.
 
 ### [TASK-17] Improve public Python API documentation
 
-**Status:** OPEN
+**Status:** DONE (issue #17 closed)
 **GitHub issue:** [#17](https://github.com/ismayilzeynal/tabulint-oss-az/issues/17)
 **Labels:** `documentation`, `good first issue`
 
@@ -907,7 +909,7 @@ The README shows two short snippets. Someone embedding tabulint in a data pipeli
 
 ### [TASK-18] Add tiny example datasets
 
-**Status:** OPEN
+**Status:** DONE (issue #18 closed)
 **GitHub issue:** [#18](https://github.com/ismayilzeynal/tabulint-oss-az/issues/18)
 **Labels:** `documentation`, `testing`, `good first issue`
 
@@ -955,7 +957,7 @@ The README shows commands against files that do not exist in the repository. A n
 
 ### [TASK-19] Improve Windows compatibility
 
-**Status:** OPEN
+**Status:** DONE (issue #19 closed)
 **GitHub issue:** [#19](https://github.com/ismayilzeynal/tabulint-oss-az/issues/19)
 **Labels:** `cross-platform`, `testing`
 
@@ -1005,7 +1007,7 @@ CSV files on Windows arrive with CRLF line endings and are often written by Exce
 
 ### [TASK-20] Add supported-Python CI matrix
 
-**Status:** OPEN
+**Status:** DONE (issue #20 closed)
 **GitHub issue:** [#20](https://github.com/ismayilzeynal/tabulint-oss-az/issues/20)
 **Labels:** `ci`, `testing`
 
@@ -1052,7 +1054,7 @@ Run the test suite against every Python version the project claims to support.
 
 ### [TASK-21] Improve contributor setup instructions
 
-**Status:** OPEN
+**Status:** DONE (issue #21 closed)
 **GitHub issue:** [#21](https://github.com/ismayilzeynal/tabulint-oss-az/issues/21)
 **Labels:** `documentation`, `good first issue`
 
@@ -1099,7 +1101,7 @@ Setup friction is where most first contributions are lost. The current instructi
 
 ### [TASK-22] Harden user-provided file-path handling
 
-**Status:** OPEN
+**Status:** DONE (issue #22 closed)
 **GitHub issue:** [#22](https://github.com/ismayilzeynal/tabulint-oss-az/issues/22)
 **Labels:** `security`, `enhancement`
 
@@ -1149,7 +1151,7 @@ The path comes straight from the command line and goes straight to `open`. A dir
 
 ### [TASK-23] Formalize CLI exit-code behavior
 
-**Status:** OPEN
+**Status:** DONE (issue #23 closed)
 **GitHub issue:** [#23](https://github.com/ismayilzeynal/tabulint-oss-az/issues/23)
 **Labels:** `cli`, `documentation`, `testing`
 
@@ -1248,7 +1250,7 @@ Tighten the type hints in one module so the intent is checkable rather than mere
 
 ### [TASK-25] Improve changelog and release instructions
 
-**Status:** OPEN
+**Status:** DONE (issue #25 closed)
 **GitHub issue:** [#25](https://github.com/ismayilzeynal/tabulint-oss-az/issues/25)
 **Labels:** `documentation`, `ci`
 
