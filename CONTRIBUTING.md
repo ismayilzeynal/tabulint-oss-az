@@ -72,6 +72,11 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+CI runs the full suite and CLI smoke test on Ubuntu and Windows with Python
+3.11, 3.12, and 3.13. Windows needs no extra setup beyond the PowerShell or
+Command Prompt virtual-environment activation shown above. Symbolic-link tests
+skip when the local account cannot create links.
+
 ## 5. Create a focused branch
 
 Use one branch per issue, with a short descriptive name. Replace `123` in the
