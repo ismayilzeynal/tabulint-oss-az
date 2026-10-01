@@ -98,6 +98,13 @@ tabulint --version
 ```
 
 Bounds must be finite numbers. Values such as `nan`, `inf`, and `-inf` are rejected.
+Integer bounds and integer values are compared without rounding, including
+integers larger than a floating-point number can represent exactly. Decimal
+and exponent notation uses Python floating-point numbers. When a numeric rule
+is applied, nonfinite data values produce a `not-numeric` error.
+Python's integer-string conversion limit still applies: over-limit integer
+bounds are rejected and over-limit integer data is reported as `not-numeric`,
+instead of being rounded through floating-point conversion.
 
 `--required FIELD` is repeatable. Names match exactly, including case and
 whitespace; repeated names are checked once in first-requested order. A missing
@@ -228,6 +235,10 @@ from tabulint import check_records
 report = check_records([{"name": "Ada", "age": 36}, {"name": "Ada", "age": 36}])
 assert not report.ok
 ```
+
+`NumericRule` also validates bounds when constructed directly: bounds must be
+finite numbers, and a minimum cannot exceed its maximum. Invalid rules raise
+`TabulintError`.
 
 See the [Python API reference](docs/api.md) for every public name, signatures,
 return values, exceptions, result fields, and a worked pipeline example.

@@ -2,6 +2,7 @@
 
 from collections import Counter
 
+from ._numbers import _format_number, _parse_number
 from .models import FieldProfile, Issue, Record
 
 BOOLEAN_LITERALS = {"true", "false", "yes", "no", "y", "n", "t", "f"}
@@ -37,15 +38,10 @@ def infer_type(value: object) -> str:
     if text.lower() in BOOLEAN_LITERALS:
         return "boolean"
     try:
-        int(text)
-        return "integer"
-    except ValueError:
-        pass
-    try:
-        float(text)
-        return "float"
+        number = _parse_number(text)
     except ValueError:
         return "string"
+    return "integer" if isinstance(number, int) else "float"
 
 
 def field_names(records: list[Record]) -> list[str]:
@@ -165,13 +161,14 @@ def check_type_consistency(records: list[Record]) -> list[Issue]:
             actual = infer_type(value)
             if actual in ("null", profile.dominant_type):
                 continue
+            displayed_value = _format_number(value) if isinstance(value, int) else repr(value)
             issues.append(
                 Issue(
                     code="type-mismatch",
                     severity="error",
                     message=(
                         f"field '{name}' expects {profile.dominant_type} "
-                        f"but value {value!r} looks like {actual}"
+                        f"but value {displayed_value} looks like {actual}"
                     ),
                     field_name=name,
                     row=row,
