@@ -14,6 +14,36 @@ def _is_finite_number(value: object) -> bool:
     return isinstance(value, int) or isinstance(value, float) and math.isfinite(value)
 
 
+def check_required_fields(records: list[Record], names: list[str]) -> list[Issue]:
+    """Check required fields in first-requested order, then record order."""
+    issues = []
+    if not records:
+        return issues
+    for name in dict.fromkeys(names):
+        if not any(name in record for record in records):
+            issues.append(
+                Issue(
+                    code="required-missing",
+                    severity="error",
+                    message=f"required field '{name}' is absent from every record",
+                    field_name=name,
+                )
+            )
+            continue
+        for row, record in enumerate(records, start=1):
+            if is_missing(record.get(name)):
+                issues.append(
+                    Issue(
+                        code="required-missing",
+                        severity="error",
+                        message=f"required field '{name}' is absent or has a missing value",
+                        field_name=name,
+                        row=row,
+                    )
+                )
+    return issues
+
+
 @dataclass(frozen=True)
 class NumericRule:
     """A minimum and/or maximum bound for one numeric field."""

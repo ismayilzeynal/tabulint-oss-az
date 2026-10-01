@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add repeatable `--required FIELD` and Python `required_fields` checks to report
+  absent or empty required values as errors while preserving existing warnings.
 - Add `--fail-on {error,warning,never}` to control whether warnings fail the
     command while keeping load and output failures at exit code 2.
 - Added a per-field missing-value summary to text reports, including counts and percentages.
