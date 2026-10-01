@@ -37,6 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("path", help="path to a .csv, .json, .jsonl, or .ndjson dataset")
     parser.add_argument(
+        "--required",
+        action="append",
+        metavar="FIELD",
+        help="require FIELD to be present and non-empty in every record (repeatable)",
+    )
+    parser.add_argument(
         "--min",
         dest="minimums",
         action="append",
@@ -96,7 +102,10 @@ def main(argv: list[str] | None = None) -> int:
     delimiter = "\t" if args.delimiter == r"\t" else args.delimiter
     try:
         rules = build_numeric_rules(args.minimums, args.maximums)
-        report = check_file(args.path, rules, delimiter=delimiter, encoding=args.encoding)
+        report = check_file(
+            args.path, rules, delimiter=delimiter, encoding=args.encoding,
+            required_fields=args.required,
+        )
     except TabulintError as exc:
         _print_console(f"tabulint: error: {exc}", stream=sys.stderr)
         return EXIT_ERROR
