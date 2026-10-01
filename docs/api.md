@@ -150,7 +150,7 @@ Pass an actual tab character (`"\t"`) for tab-separated input; the CLI's literal
 backslash-t shortcut is not interpreted by this function.
 
 In addition to the common reader errors, raises `TabulintError` for an empty or
-multi-character delimiter, an empty header name, malformed quoting, or a row
+multi-character delimiter, an empty or duplicate header name, malformed quoting, or a row
 with more fields than the header. Header names are not stripped or normalized.
 
 ### `load_json`
