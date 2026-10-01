@@ -67,7 +67,7 @@ tabulint examples/clean.ndjson
 tabulint examples/clean.csv --format json
 
 # Require fields to be present and non-empty in every record
-tabulint examples/clean.csv --required name --required age
+tabulint examples/clean.csv --required item_id --required age
 
 # Require a numeric field to stay within a range
 tabulint examples/clean.csv --min age=0 --max age=120
@@ -207,7 +207,7 @@ To select an input encoding in the Python API, pass it to `check_file`, for
 example `check_file("examples/clean.csv", rules, encoding="cp1252")`.
 
 To require fields, pass keyword-only `required_fields`, for example
-`check_file("examples/clean.csv", rules, required_fields=["name"])` or
+`check_file("examples/clean.csv", rules, required_fields=["item_id"])` or
 `check_records([{"name": "Ada"}], required_fields=["name"])`. The public
 `check_required_fields(records, names)` helper returns only the required-field
 issues; the complete check functions preserve all existing checks.
@@ -307,7 +307,7 @@ These are the known boundaries of the current release, not bugs:
 - CSV is read as UTF-8 by default with configurable encoding and delimiter; automatic delimiter sniffing is not available.
 - Datasets are loaded fully into memory, so very large files are limited by RAM.
 - Only numeric `min`/`max` validation is available; no string-length,
-  allowed-values, or required-field rules yet.
+  or allowed-values rules yet.
 - JSON output is intended for machine consumption; CSV, SARIF, JUnit, and file-specific report formats are not available yet.
 - Type inference is deliberately simple and has no date/time or currency
   awareness.
