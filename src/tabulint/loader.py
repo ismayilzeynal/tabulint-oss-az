@@ -2,6 +2,7 @@
 
 import codecs
 import csv
+import io
 import json
 from functools import partial
 from pathlib import Path
@@ -51,11 +52,22 @@ def _unique_object(
     return record
 
 
-def _validate_encoding(path: Path, encoding: str) -> None:
+def _validate_input(path: Path, encoding: str) -> None:
+    if "\0" in str(path):
+        raise TabulintError(f"{_bounded_repr(str(path))}: input path contains a NUL character")
     try:
         codecs.lookup(encoding)
     except LookupError as exc:
         raise TabulintError(f"{path}: unknown encoding {_bounded_repr(encoding)}") from exc
+    except ValueError as exc:
+        raise TabulintError(f"{path}: invalid encoding {_bounded_repr(encoding)}") from exc
+    try:
+        with io.TextIOWrapper(io.BytesIO(), encoding=encoding):
+            pass
+    except LookupError as exc:
+        raise TabulintError(
+            f"{path}: encoding {_bounded_repr(encoding)} is not a text encoding"
+        ) from exc
 
 
 def load_csv(
@@ -68,7 +80,7 @@ def load_csv(
     path = Path(path)
     if len(delimiter) != 1:
         raise TabulintError(f"{path}: CSV delimiter must be exactly one character")
-    _validate_encoding(path, encoding)
+    _validate_input(path, encoding)
     try:
         with path.open("r", newline="", encoding=encoding) as handle:
             reader = csv.DictReader(handle, delimiter=delimiter, strict=True)
@@ -90,7 +102,7 @@ def load_csv(
             return rows
     except FileNotFoundError as exc:
         raise TabulintError(f"{path}: file not found") from exc
-    except UnicodeDecodeError as exc:
+    except UnicodeError as exc:
         raise TabulintError(
             f"{path}: could not decode file using encoding '{encoding}'"
         ) from exc
@@ -107,12 +119,12 @@ def load_csv(
 def load_json(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
     """Read a JSON file containing an array of objects into a list of dicts."""
     path = Path(path)
-    _validate_encoding(path, encoding)
+    _validate_input(path, encoding)
     try:
         text = path.read_text(encoding=encoding)
     except FileNotFoundError as exc:
         raise TabulintError(f"{path}: file not found") from exc
-    except UnicodeDecodeError as exc:
+    except UnicodeError as exc:
         raise TabulintError(
             f"{path}: could not decode file using encoding '{encoding}'"
         ) from exc
@@ -141,7 +153,7 @@ def load_json(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
 def load_jsonl(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
     """Read a JSON Lines file containing one JSON object per line."""
     path = Path(path)
-    _validate_encoding(path, encoding)
+    _validate_input(path, encoding)
     rows: list[Record] = []
     try:
         with path.open("r", encoding=encoding) as handle:
@@ -165,7 +177,7 @@ def load_jsonl(path: str | Path, *, encoding: str = "utf-8") -> list[Record]:
                 rows.append(dict(item))
     except FileNotFoundError as exc:
         raise TabulintError(f"{path}: file not found") from exc
-    except UnicodeDecodeError as exc:
+    except UnicodeError as exc:
         raise TabulintError(
             f"{path}: could not decode file using encoding '{encoding}'"
         ) from exc
