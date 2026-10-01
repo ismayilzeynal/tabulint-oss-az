@@ -91,6 +91,12 @@ Missing values are null; booleans are checked before integers. Strings are
 stripped, then checked for boolean words, integers, and floats in that order.
 Boolean words are `true`, `false`, `yes`, `no`, `y`, `n`, `t`, and `f`, ignoring
 case. Other objects, including lists and dictionaries, infer as `"string"`.
+Nonfinite floats and numeric strings (NaN, infinity, or overflow to infinity)
+infer as `"string"`. Leading signs and valid underscore separators are accepted,
+including `"+5"` and `"1_000"`. Integers are compatible with a dominant `"float"`
+field; a float in a dominant `"integer"` field remains a type mismatch, including
+whole-valued floats such as `3.0`. Dominant types still use frequency and
+first-appearance ties; this compatibility rule does not change profile counts.
 This classifies values without converting them in the input records. No
 intentional `TabulintError` is raised.
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Infer nonfinite values as strings and accept integer values in dominant-float fields without noisy type-mismatch errors.
 - Verify CSV line endings, native paths, and legacy console encodings on Windows and Ubuntu in CI.
 - Distinguish absent fields from nulls when finding duplicates and compare nested objects independently of key order.
 - Prevent report output from overwriting the input dataset, escape unpaired Unicode surrogates, and support terminals with limited encodings.

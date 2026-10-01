@@ -262,6 +262,15 @@ The reader is chosen from the file extension.
 
 ## Checks
 
+Nonfinite numbers and numeric strings such as `NaN`, `inf`, and `infinity`
+(including signed and mixed-case forms) infer as `string`. Numeric validation
+still rejects them as `not-numeric`. Leading signs and valid underscore
+separators are supported: `+5` and `1_000` infer as integers. Integers are
+compatible with a dominant `float` field; floats in a dominant `integer` field
+remain mismatches, including whole-valued floats such as `3.0`. Dominant types
+use the most frequent type with first appearance breaking ties, and profile
+counts retain the original integer/float distinction.
+
 | Code | Severity | Meaning |
 | --- | --- | --- |
 | `missing-value` | warning | A field is present but empty or null |
@@ -334,8 +343,8 @@ These are the known boundaries of the current release, not bugs:
 
 - CSV is read as UTF-8 by default with configurable encoding and delimiter; automatic delimiter sniffing is not available.
 - Datasets are loaded fully into memory, so very large files are limited by RAM.
-- Only numeric `min`/`max` validation is available; no string-length,
-  or allowed-values rules yet.
+- Numeric `min`/`max` and required-field validation are available; string-length
+  and allowed-values rules are not available yet.
 - JSON output is intended for machine consumption; CSV, SARIF, JUnit, and file-specific report formats are not available yet.
 - Type inference is deliberately simple and has no date/time or currency
   awareness.
