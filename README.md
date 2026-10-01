@@ -66,6 +66,9 @@ tabulint examples/clean.ndjson
 # Emit a machine-readable JSON report
 tabulint examples/clean.csv --format json
 
+# Require fields to be present and non-empty in every record
+tabulint examples/clean.csv --required item_id --required age
+
 # Require a numeric field to stay within a range
 tabulint examples/clean.csv --min age=0 --max age=120
 
@@ -95,6 +98,20 @@ tabulint --version
 ```
 
 Bounds must be finite numbers. Values such as `nan`, `inf`, and `-inf` are rejected.
+
+`--required FIELD` is repeatable. Names match exactly, including case and
+whitespace; repeated names are checked once in first-requested order. A missing
+key, `None`, empty string, or whitespace-only string produces a `required-missing`
+error. `0` and `False` count as present. For nonempty datasets, a required field
+absent from every record produces one dataset-level error with no row; otherwise
+each missing required value is reported at its one-based record row.
+
+Existing `missing-value` warnings and `missing-field` errors remain, so a required
+field can produce both its existing finding and a `required-missing` error.
+Zero-row inputs, including header-only CSVs, keep only the existing `empty-dataset`
+warning. Without `--required`, checks are unchanged. Required errors exit 1 by
+default; `--fail-on never` still reports them but exits 0 after successful loading
+and report output. Load and output failures continue to exit 2.
 
 The `--delimiter` option applies to CSV input and accepts exactly one character.
 Use `\t` for a tab. The option is ignored for JSON input. An empty or
@@ -192,6 +209,12 @@ print(format_report_json(report))
 To select an input encoding in the Python API, pass it to `check_file`, for
 example `check_file("examples/clean.csv", rules, encoding="cp1252")`.
 
+To require fields, pass keyword-only `required_fields`, for example
+`check_file("examples/clean.csv", rules, required_fields=["item_id"])` or
+`check_records([{"name": "Ada"}], required_fields=["name"])`. The public
+`check_required_fields(records, names)` helper returns only the required-field
+issues; the complete check functions preserve all existing checks.
+
 Working with records you already have in memory:
 
 ```python
@@ -201,11 +224,8 @@ report = check_records([{"name": "Ada", "age": 36}, {"name": "Ada", "age": 36}])
 assert not report.ok
 ```
 
-Main public names: `check_file`, `check_records`, `format_report`,
-`format_report_json`, `build_numeric_rules`, `check_numeric_rules`, `load_csv`,
-`load_json`, `load_jsonl`, `load_dataset`, `analyze`, `profile_fields`,
-`infer_type`, and the
-`Report`, `Issue`, `FieldProfile`, `NumericRule`, `TabulintError` types.
+See the [Python API reference](docs/api.md) for every public name, signatures,
+return values, exceptions, result fields, and a worked pipeline example.
 
 ## Supported formats
 
@@ -224,6 +244,7 @@ The reader is chosen from the file extension.
 | --- | --- | --- |
 | `missing-value` | warning | A field is present but empty or null |
 | `missing-field` | error | A record does not contain a field other records have |
+| `required-missing` | error | A requested required field is absent or has a missing value |
 | `duplicate-record` | warning | A group of identical records, reported once |
 | `type-mismatch` | error | A value does not match the field's dominant inferred type |
 | `below-minimum` | error | A value is below a `--min` bound |
@@ -289,7 +310,7 @@ These are the known boundaries of the current release, not bugs:
 - CSV is read as UTF-8 by default with configurable encoding and delimiter; automatic delimiter sniffing is not available.
 - Datasets are loaded fully into memory, so very large files are limited by RAM.
 - Only numeric `min`/`max` validation is available; no string-length,
-  allowed-values, or required-field rules yet.
+  or allowed-values rules yet.
 - JSON output is intended for machine consumption; CSV, SARIF, JUnit, and file-specific report formats are not available yet.
 - Type inference is deliberately simple and has no date/time or currency
   awareness.
