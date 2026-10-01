@@ -109,7 +109,9 @@ not missing. No intentional `TabulintError` is raised.
 Readers return a new `list[Record]` and perform no data-quality checks.
 Direct calls to `load_csv`, `load_json`, and `load_jsonl` ignore filename
 extensions; only `load_dataset` and `check_file` dispatch by extension.
-They raise `TabulintError` for missing or unreadable files, NUL-containing paths,
+Readers accept regular files, including symbolic links to them. Directories,
+devices, and special files are rejected before reading. They raise
+`TabulintError` for these inputs, symlink loops, missing or unreadable files, NUL-containing paths,
 unknown or invalid encoding names, non-text codecs, and Unicode decoding
 failures (including a missing byte-order mark for an encoding that requires it).
 Use a text encoding such as `utf-8`, `cp1252`, or `utf-8-sig`; the last strips a

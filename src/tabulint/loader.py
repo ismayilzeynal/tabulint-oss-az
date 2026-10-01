@@ -4,6 +4,8 @@ import codecs
 import csv
 import io
 import json
+import os
+import stat
 from functools import partial
 from pathlib import Path
 
@@ -68,6 +70,23 @@ def _validate_input(path: Path, encoding: str) -> None:
         raise TabulintError(
             f"{path}: encoding {_bounded_repr(encoding)} is not a text encoding"
         ) from exc
+    if os.name == "nt":
+        # is_reserved is the compatibility fallback for Python 3.11 and 3.12.
+        is_reserved = getattr(os.path, "isreserved", None)
+        reserved = is_reserved(path) if is_reserved is not None else path.is_reserved()
+        if reserved:
+            raise TabulintError(f"{path}: device or special file path is not a regular file")
+    try:
+        mode = path.stat().st_mode
+    except FileNotFoundError as exc:
+        raise TabulintError(f"{path}: file not found") from exc
+    except OSError as exc:
+        raise TabulintError(
+            f"{path}: could not access input file ({exc.strerror or type(exc).__name__})"
+        ) from exc
+    if not stat.S_ISREG(mode):
+        kind = "directory" if stat.S_ISDIR(mode) else "device or special file"
+        raise TabulintError(f"{path}: input is a {kind}, not a regular file")
 
 
 def load_csv(
