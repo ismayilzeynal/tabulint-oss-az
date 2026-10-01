@@ -346,7 +346,9 @@ format_report(report: Report) -> str
 ```
 
 Returns text with record counts, field profiles, a missing-value summary when
-needed, and issues. Issues are sorted by row and code, with at most 50 shown;
+needed, and issues. Unpaired Unicode surrogates are escaped so the returned text
+can be written as UTF-8. The CLI also escapes characters unsupported by its
+console encoding; report files retain UTF-8 characters. Issues are sorted by row and code, with at most 50 shown;
 the summary still counts every issue. It adds no trailing newline and does not
 print or write a file. No intentional `TabulintError` is raised.
 
