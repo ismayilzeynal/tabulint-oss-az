@@ -11,7 +11,7 @@ when making programmatic decisions.
 
 Signatures use `Path` from `pathlib`. A `*` marks keyword-only arguments.
 `<factory>` means a fresh empty list or dictionary is created for each instance.
-Annotations describe supported inputs; the data classes do not enforce them
+Annotations describe supported inputs; only `NumericRule` validates its bounds
 at runtime. Unless an entry names a `TabulintError`, it has no intentional
 domain-error exception for supported inputs. Ordinary Python exceptions from
 invalid argument types, custom objects, or resource limits can still propagate.
@@ -174,8 +174,8 @@ identify the physical input line, counting blank lines.
 ### `NumericRule`
 
 ```text
-NumericRule(field_name: str, minimum: float | None = None,
-            maximum: float | None = None) -> NumericRule
+NumericRule(field_name: str, minimum: int | float | None = None,
+            maximum: int | float | None = None) -> NumericRule
 ```
 
 Returns a frozen data class with these fields:
@@ -183,11 +183,11 @@ Returns a frozen data class with these fields:
 | Field | Meaning |
 | --- | --- |
 | `field_name: str` | Exact name of the field to check. |
-| `minimum: float \| None` | Inclusive lower bound; `None` leaves it unset. |
-| `maximum: float \| None` | Inclusive upper bound; `None` leaves it unset. |
+| `minimum: int \| float \| None` | Inclusive lower bound; `None` leaves it unset. |
+| `maximum: int \| float \| None` | Inclusive upper bound; `None` leaves it unset. |
 
-The constructor does not validate bounds or raise `TabulintError`. For checked
-finite bounds and minimum/maximum ordering, use `build_numeric_rules`.
+The constructor raises `TabulintError` for bounds that are not integers or finite
+floats (including booleans), or a minimum greater than its maximum.
 
 ### `build_numeric_rules`
 
@@ -197,7 +197,10 @@ build_numeric_rules(minimums: list[str] | None = None,
 ```
 
 Returns rules parsed from entries such as `"age=0"` and `"age=120"`. Field names
-are stripped, and bounds are parsed as floats. Minimum and maximum lists are
+are stripped. Plain integer bounds are parsed exactly as integers; decimal and
+exponent forms use floats. Signs and valid underscore separators are accepted.
+Python's integer digit limit still applies after redundant leading zeros are
+removed. Minimum and maximum lists are
 independent; the last entry for a repeated field in either list wins. Rules
 follow the minimum fields' first-seen order, then maximum-only fields.
 Omitting both lists returns `[]`.
@@ -213,13 +216,11 @@ check_numeric_rules(records: list[Record], rules: list[NumericRule]) -> list[Iss
 
 Returns numeric issues in rule order, then record order. Bounds are inclusive.
 Absent fields and missing values are skipped; structural checks handle those.
-Numbers and numeric strings are compared through Python floats; booleans are
-not numeric values for this check. Float precision and range therefore apply.
-Dataset values are not explicitly checked for finiteness in the current API;
-in particular, NaN comparisons do not produce bound violations. A rule with
-neither bound still reports nonnumeric values.
-It does not validate rule definitions or intentionally raise `TabulintError`.
-Use `build_numeric_rules` to validate configuration before running the check.
+Integers and plain integer strings retain exact precision. Decimal and exponent
+strings use floats and their precision limits. Booleans, nonfinite numbers
+(including NaN and infinity), and unparseable strings produce `not-numeric`.
+A rule with neither bound still reports these values. Rules are validated by
+`NumericRule` construction; this check has no intentional `TabulintError`.
 
 ### `check_required_fields`
 

@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from tabulint import TabulintError, build_numeric_rules, check_numeric_rules
@@ -64,3 +66,141 @@ def test_finite_negative_and_decimal_bounds_still_work():
     assert rules == [NumericRule("temp", -12.5, 40.0)]
     records = [{"temp": "-12.5"}, {"temp": "0"}, {"temp": "40"}]
     assert check_numeric_rules(records, rules) == []
+
+
+@pytest.mark.parametrize("value", [
+    "nan", "NaN", "inf", "-inf", "1e400", "-1e400",
+    float("nan"), float("inf"), float("-inf"),
+])
+@pytest.mark.parametrize("rule", [NumericRule("age", minimum=0), NumericRule("age", maximum=120)])
+def test_non_finite_values_are_reported_with_one_sided_bounds(value, rule):
+    issues = check_numeric_rules([{"age": value}], [rule])
+    assert len(issues) == 1
+    assert issues[0].code == "not-numeric"
+    assert issues[0].severity == "error"
+    assert issues[0].field_name == "age"
+    assert issues[0].row == 1
+
+
+@pytest.mark.parametrize("bound_name", ["minimum", "maximum"])
+@pytest.mark.parametrize("bound", [float("nan"), float("inf"), float("-inf"), True, "10"])
+def test_direct_numeric_rule_rejects_invalid_bounds(bound_name, bound):
+    with pytest.raises(TabulintError, match="not a finite number"):
+        NumericRule("age", **{bound_name: bound})
+
+
+def test_direct_numeric_rule_rejects_inverted_bounds():
+    with pytest.raises(TabulintError, match="greater than maximum"):
+        NumericRule("age", minimum=50, maximum=10)
+
+
+@pytest.mark.parametrize("bound", [2**53 + 1, 10**400])
+@pytest.mark.parametrize("as_text", [False, True])
+def test_integer_minimum_is_exact_for_large_values(bound, as_text):
+    values = [bound - 1, bound, bound + 1]
+    records = [{"n": str(value) if as_text else value} for value in values]
+    rules = build_numeric_rules([f"n={bound}"])
+    assert rules[0].minimum == bound
+
+    issues = check_numeric_rules(records, rules)
+
+    assert len(issues) == 1
+    assert issues[0].code == "below-minimum"
+    assert issues[0].row == 1
+    assert issues[0].message == f"field 'n' value {bound - 1} is below minimum {bound}"
+
+
+@pytest.mark.parametrize("bound", [2**53 + 1, 10**400])
+@pytest.mark.parametrize("as_text", [False, True])
+def test_integer_maximum_is_exact_for_large_values(bound, as_text):
+    values = [bound - 1, bound, bound + 1]
+    records = [{"n": str(value) if as_text else value} for value in values]
+    rules = build_numeric_rules(maximums=[f"n={bound}"])
+    assert rules[0].maximum == bound
+
+    issues = check_numeric_rules(records, rules)
+
+    assert len(issues) == 1
+    assert issues[0].code == "above-maximum"
+    assert issues[0].row == 3
+    assert issues[0].message == f"field 'n' value {bound + 1} is above maximum {bound}"
+
+
+def test_huge_negative_integer_can_be_reported_without_float_overflow():
+    value = -(10**400)
+    issues = check_numeric_rules([{"n": value}], [NumericRule("n", minimum=0)])
+    assert issues[0].code == "below-minimum"
+    assert issues[0].message == f"field 'n' value {value} is below minimum 0"
+
+
+def test_large_inverted_integer_bounds_are_not_rounded_to_equality():
+    with pytest.raises(TabulintError, match="greater than maximum"):
+        build_numeric_rules([f"n={2**53 + 1}"], [f"n={2**53}"])
+
+
+def test_direct_numeric_rule_supports_huge_finite_integer_bounds():
+    rule = NumericRule("n", minimum=10**400, maximum=10**400 + 1)
+    assert check_numeric_rules([{"n": 10**400}], [rule]) == []
+
+
+def test_decimal_and_exponent_numbers_remain_supported():
+    rules = build_numeric_rules(["n=-1.5e1"], ["n=1e2"])
+    assert check_numeric_rules([{"n": "-15.0"}, {"n": "1e2"}, {"n": 1.5}], rules) == []
+
+
+@pytest.mark.parametrize("prefix", ["", "+", "-"])
+def test_zero_padded_integers_remain_exact_beyond_digit_limit(prefix):
+    integer = 2**53 + 1
+    padded = prefix + "0" * (sys.get_int_max_str_digits() + 4300) + str(integer)
+    expected = -integer if prefix == "-" else integer
+    rules = build_numeric_rules([f"n={padded}"], [f"n={padded}"])
+    assert rules[0].minimum == rules[0].maximum == expected
+    assert check_numeric_rules([{"n": padded}], rules) == []
+    assert check_numeric_rules([{"n": expected - 1}], rules)[0].code == "below-minimum"
+
+
+def test_underscored_zero_padded_integers_remain_exact():
+    padded = "0_" * (sys.get_int_max_str_digits() + 4300) + "9007199254740993"
+    rules = build_numeric_rules(maximums=["n=9007199254740992"])
+    issues = check_numeric_rules([{"n": padded}], rules)
+    assert issues[0].code == "above-maximum"
+
+
+def test_over_limit_integer_text_is_rejected_without_float_fallback():
+    limit = sys.get_int_max_str_digits()
+    if not limit:
+        pytest.skip("Python integer string conversion limit is disabled")
+    oversized = "1" * (limit + 1)
+    with pytest.raises(TabulintError, match="not a number"):
+        build_numeric_rules([f"n={oversized}"])
+    issues = check_numeric_rules([{"n": oversized}], [NumericRule("n", minimum=0)])
+    assert issues[0].code == "not-numeric"
+    assert sys.get_int_max_str_digits() == limit
+
+
+@pytest.mark.parametrize("sign,code", [(1, "above-maximum"), (-1, "below-minimum")])
+def test_oversized_native_integer_diagnostics_are_bounded(sign, code):
+    limit = sys.get_int_max_str_digits()
+    if not limit:
+        pytest.skip("Python integer string conversion limit is disabled")
+    value = sign * 10 ** (limit + 10)
+    issues = check_numeric_rules([{"n": value}], [NumericRule("n", minimum=0, maximum=0)])
+    assert len(issues) == 1
+    assert issues[0].code == code
+    assert f"integer with {value.bit_length()} bits" in issues[0].message
+    assert len(issues[0].message) < 150
+    assert sys.get_int_max_str_digits() == limit
+
+
+def test_oversized_native_integer_bounds_have_bounded_diagnostics():
+    limit = sys.get_int_max_str_digits()
+    if not limit:
+        pytest.skip("Python integer string conversion limit is disabled")
+    bound = 10 ** (limit + 10)
+    issues = check_numeric_rules([{"n": 0}], [NumericRule("n", minimum=bound)])
+    assert issues[0].code == "below-minimum"
+    assert "positive integer with" in issues[0].message
+    assert len(issues[0].message) < 150
+    with pytest.raises(TabulintError, match="greater than maximum") as caught:
+        NumericRule("n", minimum=bound, maximum=-bound)
+    assert len(str(caught.value)) < 200

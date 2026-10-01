@@ -38,6 +38,17 @@ def test_numeric_literals_remain_integers():
     assert infer_type("0") == "integer"
 
 
+def test_integer_with_redundant_zeroes_does_not_infer_as_float():
+    assert infer_type("0" * 4300 + "9007199254740993") == "integer"
+
+
+def test_oversized_native_integer_type_mismatch_has_readable_message():
+    issues = check_type_consistency([{"n": "word"}, {"n": "text"}, {"n": 10**5000}])
+    assert len(issues) == 1
+    assert issues[0].code == "type-mismatch"
+    assert "integer" in issues[0].message
+
+
 def test_mixed_boolean_spellings_have_no_type_mismatch():
     records = [{"active": "yes"}, {"active": "true"}, {"active": "N"}, {"active": "false"}]
     assert profile_fields(records)[0].dominant_type == "boolean"
