@@ -245,7 +245,7 @@ def test_missing_file_raises(write, tmp_path):
 def test_directory_read_failure_raises_tabulint_error(tmp_path, suffix):
     path = tmp_path / ("folder" + suffix)
     path.mkdir()
-    with pytest.raises(TabulintError, match="could not read file"):
+    with pytest.raises(TabulintError, match="directory.*not a regular file"):
         load_dataset(path)
 
 
