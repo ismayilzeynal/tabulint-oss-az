@@ -9,8 +9,10 @@ and JSON reports.
 
 import json
 import os
+import re
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -103,11 +105,9 @@ def test_recipe_workflow_gate_step_uses_fail_on_error(document_text):
     # examples/missing.csv then exits 0 and the gate passes, failing only
     # on a real error. The default threshold is shown only as a contrast
     # elsewhere in the guide, never in the workflow.
-    assert (
-        "python -m tabulint.cli examples/missing.csv --format json "
-        "--output tabulint-report.json --fail-on error" in yaml_block
-    )
-    assert "if: steps.validate.outcome == 'failure'" in yaml_block
+    assert '"--fail-on", "error"' in yaml_block
+    assert "DATASET_PATH: examples/missing.csv" in yaml_block
+    assert "steps.validate.outputs.exit_code" in yaml_block
     assert "|| true" not in yaml_block
 
 
@@ -156,3 +156,49 @@ def test_load_failure_exits_two_and_writes_no_report(tmp_path):
     assert result.returncode == 2
     assert "file not found" in result.stderr
     assert not output.exists()
+
+
+def _documented_script(document_text, step_name):
+    workflow = document_text.split("```yaml", 1)[1].split("```", 1)[0]
+    section = workflow.split(f"      - name: {step_name}\n", 1)[1]
+    match = re.search(r"        run: \|\n((?:          [^\n]*\n|\n)+)", section)
+    assert match, f"No Python run block for {step_name}"
+    return textwrap.dedent(match.group(1))
+
+
+@pytest.mark.parametrize("kind,expected", [("clean", 0), ("warning", 0), ("error", 1), ("bad", 2)])
+def test_documented_scripts_preserve_exit_and_remove_stale_report(document_text, tmp_path, validator, kind, expected):
+    dataset = tmp_path / "input.json"
+    content = {
+        "clean": '[{"a": 1, "b": 2}]',
+        "warning": '[{"a": null}]',
+        "error": '[{"a": 1, "b": 2}, {"a": 3}]',
+        "bad": '[{',
+    }[kind]
+    dataset.write_text(content, encoding="utf-8")
+    report = tmp_path / "tabulint-report.json"
+    report.write_text('{"stale": true}', encoding="utf-8")
+    output = tmp_path / "github-output"
+    env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), DATASET_PATH=str(dataset), GITHUB_OUTPUT=str(output))
+    capture = subprocess.run([sys.executable, "-c", _documented_script(document_text, "Validate data")],
+                             cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert capture.returncode == 0, capture.stderr
+    status = output.read_text(encoding="utf-8").strip().split("=", 1)[1]
+    assert status == str(expected)
+    if expected == 2:
+        assert not report.exists()
+    else:
+        validator.validate(json.loads(report.read_text(encoding="utf-8")))
+    env["VALIDATION_EXIT_CODE"] = status
+    gate = subprocess.run([sys.executable, "-c", _documented_script(document_text, "Apply the data-quality gate")],
+                          cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert gate.returncode == expected
+
+
+@pytest.mark.parametrize("status", ["", "3", "not-a-code"])
+def test_documented_gate_rejects_missing_or_unknown_status(document_text, status, tmp_path):
+    env = dict(os.environ, VALIDATION_EXIT_CODE=status)
+    gate = subprocess.run([sys.executable, "-c", _documented_script(document_text, "Apply the data-quality gate")],
+                          cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert gate.returncode == 2
+    assert "did not finish" in gate.stderr

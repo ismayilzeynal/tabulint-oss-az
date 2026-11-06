@@ -23,6 +23,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   tabulint:
     runs-on: ubuntu-latest
@@ -38,8 +41,23 @@ jobs:
 
       - name: Validate data
         id: validate
-        continue-on-error: true
-        run: python -m tabulint.cli examples/missing.csv --format json --output tabulint-report.json --fail-on error
+        shell: python
+        env:
+          DATASET_PATH: examples/missing.csv
+        run: |
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          # A load failure must not upload an old report from an earlier run.
+          Path("tabulint-report.json").unlink(missing_ok=True)
+          result = subprocess.run([
+              sys.executable, "-m", "tabulint.cli", os.environ["DATASET_PATH"],
+              "--format", "json", "--output", "tabulint-report.json", "--fail-on", "error",
+          ])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"exit_code={result.returncode}\n")
 
       - name: Upload JSON report
         if: always()
@@ -48,10 +66,22 @@ jobs:
           name: tabulint-report
           path: tabulint-report.json
           retention-days: 7
+          if-no-files-found: warn
 
-      - name: Fail the job when validation failed
-        if: steps.validate.outcome == 'failure'
-        run: exit 1
+      - name: Apply the data-quality gate
+        if: always()
+        shell: python
+        env:
+          VALIDATION_EXIT_CODE: ${{ steps.validate.outputs.exit_code }}
+        run: |
+          import os
+          import sys
+
+          status = os.environ.get("VALIDATION_EXIT_CODE", "")
+          if status not in {"0", "1", "2"}:
+              print("Validation did not finish with a recognized exit code.", file=sys.stderr)
+              sys.exit(2)
+          sys.exit(int(status))
 ```
 
 No PAT, secret, deployment, or elevated repository permission is needed:
@@ -76,12 +106,20 @@ The `Validate data` step runs with `--fail-on error`, so warnings are
 tolerated and only real errors fail the gate. `examples/missing.csv` has
 one `missing-value` warning, so the step exits 0 and the gate passes —
 even though the JSON report's `ok` is still `false`. The gate follows the
-step's actual exit code, not the report's `ok` field. The `Upload JSON
+CLI's actual exit code, not the report's `ok` field. The validation script
+stores that code as a step output and allows artifact upload to run before
+the final gate applies it. The `Upload JSON
 report` step still runs because of `if: always()`, so the JSON report is
 available as the `tabulint-report` artifact (kept for 7 days) whether the
 gate passes or fails. The final step then fails the job using the
-validation step's actual outcome, instead of masking failures with
+stored exit code (0, 1, or 2), instead of masking failures with
 `|| true`.
+
+The final gate runs even if upload fails. A missing or unexpected validation
+exit code fails with 2; installation or artifact-upload failures still fail
+their own steps. Before validation, any old report is removed so a load
+failure cannot upload a stale report. `if-no-files-found: warn` handles the
+expected absence of JSON after a load failure.
 
 Exit codes below are for the workflow's `--fail-on error` gate unless
 noted.
@@ -112,18 +150,23 @@ repository root, after installing the project (`python -m pip install -e .`
 or `PYTHONPATH=src`):
 
 ```bash
+rm -f tabulint-report.json
 python -m tabulint.cli examples/clean.csv --fail-on error --format json --output tabulint-report.json
 echo $?  # 0: clean dataset
 
+rm -f tabulint-report.json
 python -m tabulint.cli examples/missing.csv --fail-on error --format json --output tabulint-report.json
 echo $?  # 0: warning-only dataset, warnings tolerated under --fail-on error
 
+rm -f tabulint-report.json
 python -m tabulint.cli examples/missing.csv --format json --output tabulint-report.json
 echo $?  # 1: warning-only dataset under the default threshold
 
+rm -f tabulint-report.json
 python -m tabulint.cli examples/missing.csv --required age --fail-on error --format json --output tabulint-report.json
 echo $?  # 1: dataset with a required-missing error
 
+rm -f tabulint-report.json
 python -m tabulint.cli examples/does-not-exist.csv --format json --output tabulint-report.json
 echo $?  # 2: load failure, no report file is written
 ```
