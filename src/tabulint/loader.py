@@ -72,6 +72,16 @@ def _unique_object(
     return record
 
 
+def _strict_constant_rejector(path: Path, line_number: int | None = None):
+    """Reject NaN/Infinity constants, which Python accepts but JSON forbids."""
+    def reject(value: str) -> object:
+        location = f"{path}: line {line_number}" if line_number is not None else str(path)
+        raise TabulintError(
+            f"{location}: non-standard JSON constant {value!r} is not valid JSON"
+        )
+    return reject
+
+
 def _validate_input(path: Path, encoding: str) -> None:
     if "\0" in str(path):
         raise TabulintError(f"{_bounded_repr(str(path))}: input path contains a NUL character")
@@ -201,7 +211,11 @@ def _read_json(path: str | Path, *, encoding: str = "utf-8") -> _LoadedDataset:
     if not text.strip():
         return _LoadedDataset([], empty_message="input file is empty or contains only whitespace")
     try:
-        data = json.loads(text, object_pairs_hook=partial(_unique_object, path=path))
+        data = json.loads(
+            text,
+            object_pairs_hook=partial(_unique_object, path=path),
+            parse_constant=_strict_constant_rejector(path),
+        )
     except json.JSONDecodeError as exc:
         raise _json_error(path, exc) from exc
     except (RecursionError, ValueError) as exc:
@@ -235,6 +249,7 @@ def _read_jsonl(path: str | Path, *, encoding: str = "utf-8") -> _LoadedDataset:
                     item = json.loads(
                         line,
                         object_pairs_hook=partial(_unique_object, path=path, line_number=line_number),
+                        parse_constant=_strict_constant_rejector(path, line_number),
                     )
                 except json.JSONDecodeError as exc:
                     raise _json_error(path, exc, line_number=line_number) from exc

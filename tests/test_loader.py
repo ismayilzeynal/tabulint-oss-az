@@ -33,6 +33,20 @@ def test_json_readers_reject_duplicate_keys(write, suffix, reader, record, key):
 
 
 @pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_json_readers_reject_nonstandard_constants(write, suffix, constant):
+    record = '{"x": %s}' % constant
+    content = f"[{record}]" if suffix == ".json" else record + "\n"
+    path = write("constant" + suffix, content)
+    with pytest.raises(TabulintError) as error:
+        load_dataset(path)
+    message = str(error.value)
+    assert path in message
+    assert "non-standard JSON constant" in message
+    assert repr(constant) in message
+
+
+@pytest.mark.parametrize("suffix", [".json", ".jsonl", ".ndjson"])
 def test_load_dataset_rejects_duplicate_json_keys(write, suffix):
     record = '{"x": 1, "x": 2}'
     content = f"[{record}]" if suffix == ".json" else record + "\n"
